@@ -11,6 +11,14 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.metrics import mean_squared_error
 
 
+
+
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# C.2 Ridge và Lasso Regression
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 def select_best_lambda_cv(X_train, y_train, model_class, alphas, k=10):
     """
     Grid Search + K-Fold CV để chọn lambda tối ưu.
@@ -288,3 +296,428 @@ def plot_feature_selection_comparison(fwd_names, fwd_scores, bwd_names, bwd_scor
     
     plt.tight_layout()
     plt.show()
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# C.3 Hàm cơ sở phi tuyến tính 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import PolynomialFeatures, SplineTransformer
+
+
+class GaussianRBF(BaseEstimator, TransformerMixin):
+    """
+    Gaussian Radial Basis Function (RBF) Transform
+    φ(x) = exp(-γ · ||x - cᵢ||²)
+    
+    params
+    ------
+    n_centers : int (default=20)
+        Số điểm neo (chọn ngẫu nhiên từ train set)
+    gamma : float (default=1.0)
+        Độ rộng của Gaussian kernel
+    random_state : int
+        Seed cho reproducibility
+    """
+    def __init__(self, n_centers=20, gamma=1.0, random_state=42):
+        self.n_centers = n_centers
+        self.gamma = gamma
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        rng = np.random.RandomState(self.random_state)
+        idx = rng.choice(len(X), size=self.n_centers, replace=False)
+        self.centers_ = X[idx]
+        return self
+
+    def transform(self, X):
+        # Shape: (n_samples, n_centers)
+        # ||x - c||² = Σ(x_i - c_i)²
+        distances_sq = np.sum((X[:, None, :] - self.centers_[None, :, :]) ** 2, axis=2)
+        return np.exp(-self.gamma * distances_sq)
+
+    def get_feature_names_out(self, input_features=None):
+        return np.array([f'RBF_center_{i}' for i in range(self.n_centers)])
+
+
+class LogFeatures(BaseEstimator, TransformerMixin):
+    """
+    Log Transform Features: thêm log(x+1) cho các features skewed/positional.
+    
+    params
+    ------
+    feature_indices : list or None
+        Index của features cần log transform. 
+        None = áp dụng cho tất cả features
+    """
+    def __init__(self, feature_indices=None):
+        self.feature_indices = feature_indices
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        if self.feature_indices is None:
+            log_X = np.log1p(np.abs(X))
+        else:
+            log_X = np.log1p(np.abs(X[:, self.feature_indices]))
+        return np.hstack([X, log_X])
+
+    def get_feature_names_out(self, input_features=None):
+        n_orig = 8 if self.feature_indices is None else 8 + len(self.feature_indices)
+        return np.array([f'feature_{i}' for i in range(n_orig)])
+
+
+class SigmoidBasis(BaseEstimator, TransformerMixin):
+    """
+    Sigmoid Basis Function (Logistic Basis): φ(x) = 1 / (1 + exp(-β·(x - cᵢ)))
+    
+    Tạo non-linear basis bằng cách áp dụng sigmoid function
+    với các center điểm được chọn từ dữ liệu huấn luyện.
+    
+    params
+    ------
+    n_centers : int (default=15)
+        Số center điểm (chọn ngẫu nhiên từ train set)
+    beta : float (default=1.0)
+        Slope parameter của sigmoid function
+    random_state : int
+        Seed cho reproducibility
+    """
+    def __init__(self, n_centers=15, beta=1.0, random_state=42):
+        self.n_centers = n_centers
+        self.beta = beta
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        rng = np.random.RandomState(self.random_state)
+        idx = rng.choice(len(X), size=self.n_centers, replace=False)
+        self.centers_ = X[idx]
+        return self
+
+    def transform(self, X):
+        # σ(β·(x - c)) = 1 / (1 + exp(-β·(x - c)))
+        # Shape: (n_samples, n_features, n_centers)
+        distances = X[:, :, None] - self.centers_.T[None, :, :]  # (n_samples, n_features, n_centers)
+        # Apply sigmoid per dimension
+        sigmoid = 1.0 / (1.0 + np.exp(-self.beta * distances))
+        # Average across feature dimension: (n_samples, n_centers)
+        return np.mean(sigmoid, axis=1)
+
+    def get_feature_names_out(self, input_features=None):
+        return np.array([f'Sigmoid_basis_{i}' for i in range(self.n_centers)])
+
+
+class SplineBasis(BaseEstimator, TransformerMixin):
+    """
+    Spline Basis Function: Cubic spline interpolation
+    
+    Wrapper around sklearn.preprocessing.SplineTransformer
+    với tự động lựa chọn knots. Không cần tuning parameter riêng
+    như RBF/Sigmoid's center và gamma/beta.
+    
+    params
+    ------
+    n_knots : int (default=5)
+        Số knot điểm cho spline (tự động phân phối đều trên dữ liệu)
+    degree : int (default=3)
+        Bậc của spline polynomial (3 = cubic)
+    """
+    def __init__(self, n_knots=5, degree=3, include_bias=False):
+        self.n_knots = n_knots
+        self.degree = degree
+        self.include_bias = include_bias
+        self.transformer_ = None
+
+    def fit(self, X, y=None):
+        # SplineTransformer tự động tính knots từ dữ liệu
+        self.transformer_ = SplineTransformer(
+            n_knots=self.n_knots,
+            degree=self.degree,
+            include_bias=self.include_bias
+        )
+        self.transformer_.fit(X)
+        return self
+
+    def transform(self, X):
+        return self.transformer_.transform(X)
+
+    def get_feature_names_out(self, input_features=None):
+        return self.transformer_.get_feature_names_out(input_features)
+
+
+def apply_basis_function(X_train, X_val, X_test, basis_type='polynomial', **kwargs):
+    """
+    Áp dụng non-linear basis function.
+    returns: (X_train_basis, X_val_basis, X_test_basis, transformer)
+    """
+    if basis_type == 'polynomial':
+        degree = kwargs.get('degree', 2)
+        transformer = PolynomialFeatures(degree=degree, include_bias=False)
+        X_train_basis = transformer.fit_transform(X_train)
+        X_val_basis = transformer.transform(X_val)
+        X_test_basis = transformer.transform(X_test)
+        
+    elif basis_type == 'rbf':
+        n_centers = kwargs.get('n_centers', 20)
+        gamma = kwargs.get('gamma', 1.0)
+        transformer = GaussianRBF(n_centers=n_centers, gamma=gamma)
+        X_train_basis = transformer.fit_transform(X_train)
+        X_val_basis = transformer.transform(X_val)
+        X_test_basis = transformer.transform(X_test)
+        
+    elif basis_type == 'sigmoid':
+        n_centers = kwargs.get('n_centers', 15)
+        beta = kwargs.get('beta', 1.0)
+        transformer = SigmoidBasis(n_centers=n_centers, beta=beta)
+        X_train_basis = transformer.fit_transform(X_train)
+        X_val_basis = transformer.transform(X_val)
+        X_test_basis = transformer.transform(X_test)
+        
+    elif basis_type == 'spline':
+        n_knots = kwargs.get('n_knots', 5)
+        degree = kwargs.get('degree', 3)
+        transformer = SplineBasis(n_knots=n_knots, degree=degree)
+        X_train_basis = transformer.fit_transform(X_train)
+        X_val_basis = transformer.transform(X_val)
+        X_test_basis = transformer.transform(X_test)
+        
+    elif basis_type == 'log':
+        feature_indices = kwargs.get('feature_indices', None)
+        transformer = LogFeatures(feature_indices=feature_indices)
+        X_train_basis = transformer.fit_transform(X_train)
+        X_val_basis = transformer.transform(X_val)
+        X_test_basis = transformer.transform(X_test)
+    else:
+        raise ValueError(f"Unknown basis_type: {basis_type}")
+
+    return X_train_basis, X_val_basis, X_test_basis, transformer
+
+
+
+def plot_validation_curve_polynomial(X_train, y_train, X_val, y_val, degrees=[1, 2, 3, 4, 5],
+                                       model_class=Ridge, alpha=1.0):
+    """
+    Vẽ validation curve: RMSE theo bậc đa thức.
+    returns: results_df : DataFrame (RMSE cho mỗi degree)
+    """
+    from sklearn.preprocessing import PolynomialFeatures
+    
+    train_rmses = []
+    val_rmses = []
+    n_features = []
+    
+    for degree in degrees:
+        # Transform
+        poly = PolynomialFeatures(degree=degree, include_bias=False)
+        X_train_poly = poly.fit_transform(X_train)
+        X_val_poly = poly.transform(X_val)
+        
+        # Fit model
+        model = model_class(alpha=alpha, max_iter=10000)
+        model.fit(X_train_poly, y_train)
+        
+        # Evaluate
+        train_rmse = np.sqrt(mean_squared_error(y_train, model.predict(X_train_poly)))
+        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val_poly)))
+        
+        train_rmses.append(train_rmse)
+        val_rmses.append(val_rmse)
+        n_features.append(X_train_poly.shape[1])
+    
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(degrees, train_rmses, 'o-', linewidth=2, markersize=8, label='Train RMSE', color='#1f77b4')
+    plt.plot(degrees, val_rmses, 's-', linewidth=2, markersize=8, label='Validation RMSE', color='#ff7f0e')
+    
+    plt.xlabel('Bậc đa thức', fontsize=11, fontweight='bold')
+    plt.ylabel('RMSE', fontsize=11, fontweight='bold')
+    plt.title('Validation Curve: RMSE theo bậc đa thức', fontsize=13, fontweight='bold')
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
+    
+    # Secondary axis: số features
+    def degree_to_n_features(x):
+        x = np.asarray(x)
+        if np.ndim(x) == 0:  # scalar
+            idx = int(x)
+            return n_features[idx] if idx < len(n_features) else 0
+        else:  # array
+            return np.array([n_features[int(idx)] if int(idx) < len(n_features) else 0 for idx in x])
+    
+    ax2 = plt.gca().secondary_xaxis('top', functions=(degree_to_n_features, lambda y: y))
+    ax2.set_xlabel('# Features', fontsize=10)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Return results table
+    results_df = pd.DataFrame({
+        'Degree': degrees,
+        'Num_Features': n_features,
+        'Train_RMSE': train_rmses,
+        'Val_RMSE': val_rmses,
+        'Overfitting_Gap': [val - train for train, val in zip(train_rmses, val_rmses)]
+    })
+    
+    return results_df
+
+
+def plot_validation_curve_rbf(X_train, y_train, X_val, y_val, n_centers_list=[5, 10, 15, 20, 30, 50],
+                               gamma=1.0, model_class=Ridge, alpha=1.0):
+    """
+    Vẽ validation curve: RMSE theo số RBF centers.
+    returns: results_df : DataFrame
+        RMSE cho mỗi n_centers
+    """
+    train_rmses = []
+    val_rmses = []
+    
+    for n_centers in n_centers_list:
+        # Transform
+        rbf = GaussianRBF(n_centers=n_centers, gamma=gamma)
+        X_train_rbf = rbf.fit_transform(X_train)
+        X_val_rbf = rbf.transform(X_val)
+        
+        # Fit model
+        model = model_class(alpha=alpha, max_iter=10000)
+        model.fit(X_train_rbf, y_train)
+        
+        # Evaluate
+        train_rmse = np.sqrt(mean_squared_error(y_train, model.predict(X_train_rbf)))
+        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val_rbf)))
+        
+        train_rmses.append(train_rmse)
+        val_rmses.append(val_rmse)
+    
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(n_centers_list, train_rmses, 'o-', linewidth=2, markersize=8, label='Train RMSE', color='#2ca02c')
+    plt.plot(n_centers_list, val_rmses, 's-', linewidth=2, markersize=8, label='Validation RMSE', color='#d62728')
+    
+    plt.xlabel('Số hàm cơ sở', fontsize=11, fontweight='bold')
+    plt.ylabel('RMSE', fontsize=11, fontweight='bold')
+    plt.title(f'Validation Curve: RMSE theo số hàm cơ sở RBF (γ={gamma})', fontsize=13, fontweight='bold')
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
+    plt.xticks(n_centers_list)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Return results table
+    results_df = pd.DataFrame({
+        'N_Centers': n_centers_list,
+        'Train_RMSE': train_rmses,
+        'Val_RMSE': val_rmses,
+        'Overfitting_Gap': [val - train for train, val in zip(train_rmses, val_rmses)]
+    })
+    
+    return results_df
+
+
+def plot_validation_curve_sigmoid(X_train, y_train, X_val, y_val, n_centers_list=[5, 10, 15, 20, 25, 30],
+                                   beta=1.0, model_class=Ridge, alpha=1.0):
+    """
+    Vẽ validation curve: RMSE theo số Sigmoid Basis centers.
+    returns results_df : DataFrame
+        RMSE cho mỗi n_centers
+    """
+    train_rmses = []
+    val_rmses = []
+    
+    for n_centers in n_centers_list:
+        # Transform
+        sigmoid = SigmoidBasis(n_centers=n_centers, beta=beta)
+        X_train_sigmoid = sigmoid.fit_transform(X_train)
+        X_val_sigmoid = sigmoid.transform(X_val)
+        
+        # Fit model
+        model = model_class(alpha=alpha, max_iter=10000)
+        model.fit(X_train_sigmoid, y_train)
+        
+        # Evaluate
+        train_rmse = np.sqrt(mean_squared_error(y_train, model.predict(X_train_sigmoid)))
+        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val_sigmoid)))
+        
+        train_rmses.append(train_rmse)
+        val_rmses.append(val_rmse)
+    
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(n_centers_list, train_rmses, 'o-', linewidth=2, markersize=8, label='Train RMSE', color='#9467bd')
+    plt.plot(n_centers_list, val_rmses, 's-', linewidth=2, markersize=8, label='Validation RMSE', color='#e377c2')
+    
+    plt.xlabel('Số hàm cơ sở', fontsize=11, fontweight='bold')
+    plt.ylabel('RMSE', fontsize=11, fontweight='bold')
+    plt.title(f'Validation Curve: RMSE theo số hàm cơ sở sigmoid (β={beta})', fontsize=13, fontweight='bold')
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
+    plt.xticks(n_centers_list)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Return results table
+    results_df = pd.DataFrame({
+        'N_Centers': n_centers_list,
+        'Train_RMSE': train_rmses,
+        'Val_RMSE': val_rmses,
+        'Overfitting_Gap': [val - train for train, val in zip(train_rmses, val_rmses)]
+    })
+    
+    return results_df
+
+
+def plot_validation_curve_spline(X_train, y_train, X_val, y_val, n_knots_list=[3, 4, 5, 6, 7, 8, 10],
+                                  degree=3, model_class=Ridge, alpha=1.0):
+    """
+    Vẽ validation curve: RMSE theo số Spline knots.
+    returns results_df : DataFrame
+        RMSE cho mỗi n_knots
+    """
+    train_rmses = []
+    val_rmses = []
+    
+    for n_knots in n_knots_list:
+        # Transform
+        spline = SplineBasis(n_knots=n_knots, degree=degree)
+        X_train_spline = spline.fit_transform(X_train)
+        X_val_spline = spline.transform(X_val)
+        
+        # Fit model
+        model = model_class(alpha=alpha, max_iter=10000)
+        model.fit(X_train_spline, y_train)
+        
+        # Evaluate
+        train_rmse = np.sqrt(mean_squared_error(y_train, model.predict(X_train_spline)))
+        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val_spline)))
+        
+        train_rmses.append(train_rmse)
+        val_rmses.append(val_rmse)
+    
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(n_knots_list, train_rmses, 'o-', linewidth=2, markersize=8, label='Train RMSE', color='#9467bd')
+    plt.plot(n_knots_list, val_rmses, 's-', linewidth=2, markersize=8, label='Validation RMSE', color='#e377c2')
+    
+    plt.xlabel('Số knot điểm', fontsize=11, fontweight='bold')
+    plt.ylabel('RMSE', fontsize=11, fontweight='bold')
+    plt.title(f'Validation Curve: RMSE theo số Spline knots (degree={degree})', fontsize=13, fontweight='bold')
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
+    plt.xticks(n_knots_list)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Return results table
+    results_df = pd.DataFrame({
+        'N_Knots': n_knots_list,
+        'Train_RMSE': train_rmses,
+        'Val_RMSE': val_rmses,
+        'Overfitting_Gap': [val - train for train, val in zip(train_rmses, val_rmses)]
+    })
+    
+    return results_df
