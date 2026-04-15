@@ -13,11 +13,6 @@ from scipy import stats
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import StandardScaler
 
-from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, LassoCV, lasso_path
-from sklearn.model_selection import KFold, cross_val_score
-from sklearn.metrics import mean_squared_error
-
-
 # ── Global plot style ───────────────────────────────────────────────────────
 PLOT_DIR = "plots"
 os.makedirs(PLOT_DIR, exist_ok=True)
@@ -153,8 +148,8 @@ def plot_target_distribution(df: pd.DataFrame,
              ha="center", color="#E45756", fontsize=10)
 
     plt.tight_layout()
-    # if save:
-        # plt.savefig(f"{PLOT_DIR}/target_distribution.png", bbox_inches="tight")
+    if save:
+        plt.savefig(f"{PLOT_DIR}/target_distribution.png", bbox_inches="tight")
     plt.show()
     print(f"\nThống kê {target}:")
     print(y.describe().round(2).to_string())
@@ -183,8 +178,8 @@ def plot_correlation_matrix(df: pd.DataFrame,
                 annot_kws={"size": 9})
     ax.set_title("Ma trận tương quan (sắp xếp theo |corr| với target)", fontweight="bold")
     plt.tight_layout()
-    # if save:
-        # plt.savefig(f"{PLOT_DIR}/correlation_matrix.png", bbox_inches="tight")
+    if save:
+        plt.savefig(f"{PLOT_DIR}/correlation_matrix.png", bbox_inches="tight")
     plt.show()
 
     target_corr = corr[target].drop(target).sort_values(key=abs, ascending=False)
@@ -227,8 +222,8 @@ def plot_scatter_features(df: pd.DataFrame,
 
     fig.suptitle("Scatter plots: Features vs Target", fontsize=13, fontweight="bold")
     plt.tight_layout()
-    # if save:
-        # plt.savefig(f"{PLOT_DIR}/scatter_features.png", bbox_inches="tight")
+    if save:
+        plt.savefig(f"{PLOT_DIR}/scatter_features.png", bbox_inches="tight")
     plt.show()
 
 
@@ -292,8 +287,8 @@ def report_outliers(df: pd.DataFrame,
 
     fig.suptitle("Boxplots — Phát hiện Outliers", fontsize=13, fontweight="bold")
     plt.tight_layout()
-    #if save:
-        # plt.savefig(f"{PLOT_DIR}/outlier_boxplots.png", bbox_inches="tight")
+    if save:
+        plt.savefig(f"{PLOT_DIR}/outlier_boxplots.png", bbox_inches="tight")
     plt.show()
 
     return result_df
@@ -439,8 +434,8 @@ def plot_split_distribution(y_train, y_val, y_test,
     fig.suptitle("Phân bố target trong 3 tập — kiểm tra stratification",
                  fontsize=12, fontweight="bold")
     plt.tight_layout()
-    # if save:
-        # plt.savefig(f"{PLOT_DIR}/split_distribution.png", bbox_inches="tight")
+    if save:
+        plt.savefig(f"{PLOT_DIR}/split_distribution.png", bbox_inches="tight")
     plt.show()
 
 
@@ -482,1007 +477,108 @@ def breusch_pagan_test(residuals: np.ndarray,
     return result
 
 
+# 2.2.3
 
-
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# C.2 Ridge và Lasso Regression
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def select_best_lambda_cv(X_train, y_train, model_class, alphas, k=10):
+def normal_equations(X: np.ndarray, y: np.ndarray) -> np.ndarray:
     """
-    Grid Search + K-Fold CV để chọn lambda tối ưu.
-    Return: (best_alpha, best_rmse, results)
+    Tính nghiệm OLS bằng Normal Equations.
+    w* = (ΦᵀΦ)⁻¹Φᵀt
     """
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    results = []
-
-    for alpha in alphas:
-        model = model_class(alpha=alpha, max_iter=10000)
-        neg_mse = cross_val_score(
-            model, X_train, y_train,
-            cv=kf,
-            scoring='neg_mean_squared_error'
-        )
-        rmse_folds = np.sqrt(-neg_mse)
-        results.append((alpha, rmse_folds.mean(), rmse_folds.std()))
-
-    best_idx = np.argmin([r[1] for r in results])
-    best_alpha = results[best_idx][0]
-    best_rmse = results[best_idx][1]
-    return best_alpha, best_rmse, results
-
-
-def select_best_lambda_lasso_path(X_train, y_train, alphas, k=10):
-    """
-    Dùng LassoCV với built-in warm-start.
-    Return: (best_alpha, results, fitted_model)
-    """
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-
-    model = LassoCV(
-        alphas=alphas,
-        cv=kf,
-        max_iter=10000,
-        random_state=42
-    )
-    model.fit(X_train, y_train)
-
-    mean_rmse = np.sqrt(model.mse_path_.mean(axis=1))
-    std_rmse = model.mse_path_.std(axis=1)
-    results = list(zip(model.alphas_, mean_rmse, std_rmse))
-
-    return model.alpha_, results, model
-
-
-def plot_regularization_path(X_train, y_train, alphas, feature_names,
-                              model_class=Ridge, best_alpha=None):
-    """
-    Vẽ regularization path với feature names thực tế.
-    - Ridge: fit tuần tự với alphas
-    - Lasso: dùng sklearn.linear_model.lasso_path (built-in warm-start)
-    """
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    if model_class == Lasso:
-        # lasso_path() yêu cầu alphas sắp xếp giảm dần
-        alphas_sorted = np.sort(alphas)[::-1]
-        alphas_out, coefs, _ = lasso_path(X_train, y_train, alphas=alphas_sorted)
-        
-        # coefs shape: (n_features, n_alphas)
-        for i, name in enumerate(feature_names):
-            ax.plot(np.log10(alphas_out), coefs[i], marker='o', markersize=3, label=name)
-
-        ax.set_title('Lasso Regularization Path (Warm-start via lasso_path)', fontsize=13, fontweight='bold')
-
-    else:  # Ridge
-        coefs = []
-        for alpha in alphas:
-            model = Ridge(alpha=alpha, max_iter=10000)
-            model.fit(X_train, y_train)
-            coefs.append(model.coef_.copy())
-
-        coefs = np.array(coefs)  # (n_alphas, n_features)
-        for i, name in enumerate(feature_names):
-            ax.plot(np.log10(alphas), coefs[:, i], marker='o', markersize=3, label=name)
-
-        ax.set_title('Ridge Regularization Path', fontsize=13, fontweight='bold')
-
-    # Đánh dấu best alpha nếu có
-    if best_alpha is not None:
-        ax.axvline(np.log10(best_alpha), color='red', linestyle='--', linewidth=2,
-                   label=f'Best α = {best_alpha:.4f}', zorder=10)
-
-    ax.set_xlabel('log10(λ)', fontsize=11)
-    ax.set_ylabel('Coefficient value', fontsize=11)
-    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=9)
-    ax.grid(True, alpha=0.3)
-    ax.invert_xaxis()  # trái = ít regularization, phải = nhiều
-    plt.tight_layout()
-
-    # plt.savefig(f"{PLOT_DIR}/{model_class.__name__.lower()}_regularization_path.png", bbox_inches="tight")
-    plt.show()
-
-
-
-def forward_stepwise_selection(X, y, feature_names):
-    """Forward Stepwise Selection."""
-    selected_features = []
-    remaining_features = list(range(X.shape[1]))
-    best_scores = []
-
-    while remaining_features:
-        best_feature = None
-        best_score = float('inf')
-
-        for feature_idx in remaining_features:
-            current_features = selected_features + [feature_idx]
-            X_subset = X[:, current_features]
-
-            # Fit OLS
-            X_b = np.c_[np.ones(X_subset.shape[0]), X_subset]
-            theta = np.linalg.inv(X_b.T @ X_b) @ X_b.T @ y
-            y_pred = X_b @ theta
-            rmse = np.sqrt(mean_squared_error(y, y_pred))
-
-            if rmse < best_score:
-                best_score = rmse
-                best_feature = feature_idx
-
-        if best_feature is not None:
-            selected_features.append(best_feature)
-            remaining_features.remove(best_feature)
-            best_scores.append(best_score)
-        else:
-            break
-
-    selected_names = [feature_names[i] for i in selected_features]
-    return selected_features, selected_names, best_scores
-
-
-def backward_elimination(X, y, feature_names):
-    """Backward Elimination."""
-    current_features = list(range(X.shape[1]))
-    best_scores = []
-
-    while len(current_features) > 1:
-        worst_feature = None
-        best_score = float('inf')
-
-        for feature_idx in current_features:
-            temp_features = [f for f in current_features if f != feature_idx]
-            X_subset = X[:, temp_features]
-
-            # Fit OLS
-            X_b = np.c_[np.ones(X_subset.shape[0]), X_subset]
-            theta = np.linalg.inv(X_b.T @ X_b) @ X_b.T @ y
-            y_pred = X_b @ theta
-            rmse = np.sqrt(mean_squared_error(y, y_pred))
-
-            if rmse < best_score:
-                best_score = rmse
-                worst_feature = feature_idx
-
-        if worst_feature is not None:
-            current_features.remove(worst_feature)
-            best_scores.append(best_score)
-        else:
-            break
-
-    selected_names = [feature_names[i] for i in current_features]
-    return current_features, selected_names, best_scores
-
-
-def lasso_feature_selection(X_train, y_train, alpha, feature_names):
-    """Feature selection using Lasso coefficients."""
-    lasso = Lasso(alpha=alpha)
-    lasso.fit(X_train, y_train)
-    selected_indices = np.where(lasso.coef_ != 0)[0]
-    selected_names = [feature_names[i] for i in selected_indices]
-    return selected_indices, selected_names, lasso.coef_
-
-
-from sklearn.linear_model import ElasticNet
-from sklearn.model_selection import KFold, cross_val_score
-
-def plot_elastic_net_heatmap(X_train, y_train, alphas_en, l1_ratios, k=3):
-    """
-    Grid Search + K-Fold CV cho Elastic Net.
-    Bỏ X_val, y_val → dùng CV trên toàn X_train.
-    """
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    results_en = []
-
-    for α in alphas_en:
-        for l1_r in l1_ratios:
-            en = ElasticNet(alpha=α, l1_ratio=l1_r, max_iter=10000)
-            neg_mse = cross_val_score(
-                en, X_train, y_train,
-                cv=kf,
-                scoring='neg_mean_squared_error'
-            )
-            mean_rmse = np.sqrt(-neg_mse).mean()
-            std_rmse  = np.sqrt(-neg_mse).std()
-            results_en.append((α, l1_r, mean_rmse, std_rmse))
-
-    best_en  = min(results_en, key=lambda x: x[2])
-
-    # Tạo matrix
-    rmse_matrix = np.array([r[2] for r in results_en]).reshape(
-        len(alphas_en), len(l1_ratios)
-    )
-
-    # Vẽ heatmap
-    fig, ax = plt.subplots(figsize=(10, 7))
-    im = ax.imshow(rmse_matrix, cmap='viridis', aspect='auto', origin='lower')
-    plt.colorbar(im, ax=ax, label='CV RMSE')
-
-    # Label log scale cho trục Y
-    ax.set_xticks(range(len(l1_ratios)))
-    ax.set_xticklabels([f'{r:.1f}' for r in l1_ratios])
-    ax.set_yticks(range(len(alphas_en)))
-    ax.set_yticklabels([f'{a:.4g}' for a in alphas_en])   # ← gọn hơn
-    ax.set_xlabel('l1_ratio  (0=Ridge, 1=Lasso)', fontsize=11)
-    ax.set_ylabel('λ (alpha)', fontsize=11)
-    ax.set_title(f'Elastic Net Grid Search — {k}-Fold CV RMSE', 
-                 fontsize=13, fontweight='bold')
-
-    # Annotation RMSE vào từng ô
-    for i in range(len(alphas_en)):
-        for j in range(len(l1_ratios)):
-            ax.text(j, i, f'{rmse_matrix[i,j]:,.0f}',
-                    ha='center', va='center',
-                    fontsize=7,
-                    color='white' if rmse_matrix[i,j] > rmse_matrix.mean() else 'black')
-
-    # Đánh dấu best
-    best_i = list(alphas_en).index(best_en[0])
-    best_j = list(l1_ratios).index(best_en[1])
-    ax.plot(best_j, best_i, 'r*', markersize=20,
-            markeredgecolor='white', markeredgewidth=1.5,
-            label=f'Best: λ={best_en[0]:.4g}, l1={best_en[1]:.1f}, RMSE={best_en[2]:,.0f}')
-    ax.legend(loc='upper right', fontsize=9)
-
-    plt.tight_layout()
-    # plt.savefig(f"{PLOT_DIR}/elastic_net.png", bbox_inches="tight")
-    plt.show()
-
-    return rmse_matrix, best_en, results_en
-
-
-def plot_feature_selection_comparison(fwd_names, fwd_scores, bwd_names, bwd_scores, 
-                                      lasso_names, lasso_rmse):
-    """
-    Vẽ so sánh 3 phương pháp feature selection.
-    """
-    methods = ['Forward Stepwise', 'Backward Elimination', 'Lasso-based']
-    n_feats = [len(fwd_names), len(bwd_names), len(lasso_names)]
-    rmses = [fwd_scores[-1] if fwd_scores else 0, 
-             bwd_scores[-1] if bwd_scores else 0, 
-             lasso_rmse]
+    # Thêm cột bias (φ₀ = 1)
+    Phi = np.column_stack([np.ones(len(X)), X])
     
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    
-    # Plot 1: Number of features
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
-    bars1 = axes[0].bar(methods, n_feats, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-    axes[0].set_ylabel('# Features selected', fontsize=11)
-    axes[0].set_title('Feature Selection: Số lượng features', fontsize=12, fontweight='bold')
-    axes[0].grid(axis='y', alpha=0.3)
-    
-    # Thêm giá trị trên các bar
-    for bar, n in zip(bars1, n_feats):
-        height = bar.get_height()
-        axes[0].text(bar.get_x() + bar.get_width()/2., height,
-                    f'{int(n)}', ha='center', va='bottom', fontsize=11, fontweight='bold')
-    
-    # Plot 2: RMSE performance
-    bars2 = axes[1].bar(methods, rmses, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-    axes[1].set_ylabel('Validation RMSE', fontsize=11)
-    axes[1].set_title('Feature Selection: Performance', fontsize=12, fontweight='bold')
-    axes[1].grid(axis='y', alpha=0.3)
-    
-    # Thêm giá trị trên các bar
-    for bar, rmse in zip(bars2, rmses):
-        height = bar.get_height()
-        axes[1].text(bar.get_x() + bar.get_width()/2., height,
-                    f'{rmse:,.0f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
-    
-    plt.tight_layout()
-    # plt.savefig(f"{PLOT_DIR}/feature_selection.png", bbox_inches="tight")
-    plt.show()
+    # w* = (ΦᵀΦ)⁻¹Φᵀt
+    w = np.linalg.pinv(Phi.T @ Phi) @ (Phi.T @ y)
+    return w
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# C.3 Hàm cơ sở phi tuyến tính 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import PolynomialFeatures, SplineTransformer
+def predict(X: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """Dự đoán với bias term."""
+    Phi = np.column_stack([np.ones(len(X)), X])
+    return Phi @ w
 
 
-class GaussianRBF(BaseEstimator, TransformerMixin):
-    """
-    Gaussian Radial Basis Function (RBF) Transform
-    φ(x) = exp(-γ · ||x - cᵢ||²)
-    
-    params
-    ------
-    n_centers : int (default=20)
-        Số điểm neo (chọn ngẫu nhiên từ train set)
-    gamma : float (default=1.0)
-        Độ rộng của Gaussian kernel
-    random_state : int
-        Seed cho reproducibility
-    """
-    def __init__(self, n_centers=20, gamma=1.0, random_state=42):
-        self.n_centers = n_centers
-        self.gamma = gamma
-        self.random_state = random_state
-
-    def fit(self, X, y=None):
-        rng = np.random.RandomState(self.random_state)
-        idx = rng.choice(len(X), size=self.n_centers, replace=False)
-        self.centers_ = X[idx]
-        return self
-
-    def transform(self, X):
-        # Shape: (n_samples, n_centers)
-        # ||x - c||² = Σ(x_i - c_i)²
-        distances_sq = np.sum((X[:, None, :] - self.centers_[None, :, :]) ** 2, axis=2)
-        return np.exp(-self.gamma * distances_sq)
-
-    def get_feature_names_out(self, input_features=None):
-        return np.array([f'RBF_center_{i}' for i in range(self.n_centers)])
-
-
-class SplineBasis(BaseEstimator, TransformerMixin):
-    """
-    Spline Basis Function: Cubic spline interpolation
-    
-    Wrapper around sklearn.preprocessing.SplineTransformer
-    với tự động lựa chọn knots. Không cần tuning parameter riêng
-    như RBF/Sigmoid's center và gamma/beta.
-    
-    params
-    ------
-    n_knots : int (default=5)
-        Số knot điểm cho spline (tự động phân phối đều trên dữ liệu)
-    degree : int (default=3)
-        Bậc của spline polynomial (3 = cubic)
-    """
-    def __init__(self, n_knots=5, degree=3, include_bias=False):
-        self.n_knots = n_knots
-        self.degree = degree
-        self.include_bias = include_bias
-        self.transformer_ = None
-
-    def fit(self, X, y=None):
-        # SplineTransformer tự động tính knots từ dữ liệu
-        self.transformer_ = SplineTransformer(
-            n_knots=self.n_knots,
-            degree=self.degree,
-            include_bias=self.include_bias
-        )
-        self.transformer_.fit(X)
-        return self
-
-    def transform(self, X):
-        return self.transformer_.transform(X)
-
-    def get_feature_names_out(self, input_features=None):
-        return self.transformer_.get_feature_names_out(input_features)
-
-
-def apply_basis_function(X_train, X_val, X_test, basis_type='polynomial', **kwargs):
-    """
-    Áp dụng non-linear basis function.
-    returns: (X_train_basis, X_val_basis, X_test_basis, transformer)
-    """
-    if basis_type == 'polynomial':
-        degree = kwargs.get('degree', 2)
-        transformer = PolynomialFeatures(degree=degree, include_bias=False)
-        X_train_basis = transformer.fit_transform(X_train)
-        X_val_basis = transformer.transform(X_val)
-        X_test_basis = transformer.transform(X_test)
-        
-    elif basis_type == 'rbf':
-        n_centers = kwargs.get('n_centers', 20)
-        gamma = kwargs.get('gamma', 1.0)
-        transformer = GaussianRBF(n_centers=n_centers, gamma=gamma)
-        X_train_basis = transformer.fit_transform(X_train)
-        X_val_basis = transformer.transform(X_val)
-        X_test_basis = transformer.transform(X_test)   
-        
-    elif basis_type == 'spline':
-        n_knots = kwargs.get('n_knots', 5)
-        degree = kwargs.get('degree', 3)
-        transformer = SplineBasis(n_knots=n_knots, degree=degree)
-        X_train_basis = transformer.fit_transform(X_train)
-        X_val_basis = transformer.transform(X_val)
-        X_test_basis = transformer.transform(X_test)
-        
-    else:
-        raise ValueError(f"Unknown basis_type: {basis_type}")
-
-    return X_train_basis, X_val_basis, X_test_basis, transformer
-
-
-
-def plot_validation_curve_polynomial(X_train, y_train, X_val, y_val, degrees=[1, 2, 3, 4, 5],
-                                       model_class=Ridge, alpha=1.0):
-    """
-    Vẽ validation curve: RMSE theo bậc đa thức.
-    returns: results_df : DataFrame (RMSE cho mỗi degree)
-    """
-    from sklearn.preprocessing import PolynomialFeatures
-    
-    train_rmses = []
-    val_rmses = []
-    n_features = []
-    
-    for degree in degrees:
-        # Transform
-        poly = PolynomialFeatures(degree=degree, include_bias=False)
-        X_train_poly = poly.fit_transform(X_train)
-        X_val_poly = poly.transform(X_val)
-        
-        # Fit model
-        model = model_class(alpha=alpha, max_iter=10000)
-        model.fit(X_train_poly, y_train)
-        
-        # Evaluate
-        train_rmse = np.sqrt(mean_squared_error(y_train, model.predict(X_train_poly)))
-        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val_poly)))
-        
-        train_rmses.append(train_rmse)
-        val_rmses.append(val_rmse)
-        n_features.append(X_train_poly.shape[1])
-    
-    # Plot
-    plt.figure(figsize=(10, 6))
-    plt.plot(degrees, train_rmses, 'o-', linewidth=2, markersize=8, label='Train RMSE', color='#1f77b4')
-    plt.plot(degrees, val_rmses, 's-', linewidth=2, markersize=8, label='Validation RMSE', color='#ff7f0e')
-    
-    plt.xlabel('Bậc đa thức', fontsize=11, fontweight='bold')
-    plt.ylabel('RMSE', fontsize=11, fontweight='bold')
-    plt.title('Validation Curve: RMSE theo bậc đa thức', fontsize=13, fontweight='bold')
-    plt.legend(fontsize=10)
-    plt.grid(True, alpha=0.3)
-    
-    # Secondary axis: số features
-    def degree_to_n_features(x):
-        x = np.asarray(x)
-        if np.ndim(x) == 0:  # scalar
-            idx = int(x)
-            return n_features[idx] if idx < len(n_features) else 0
-        else:  # array
-            return np.array([n_features[int(idx)] if int(idx) < len(n_features) else 0 for idx in x])
-    
-    ax2 = plt.gca().secondary_xaxis('top', functions=(degree_to_n_features, lambda y: y))
-    ax2.set_xlabel('# Features', fontsize=10)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    # Return results table
-    results_df = pd.DataFrame({
-        'Degree': degrees,
-        'Num_Features': n_features,
-        'Train_RMSE': train_rmses,
-        'Val_RMSE': val_rmses,
-        'Overfitting_Gap': [val - train for train, val in zip(train_rmses, val_rmses)]
-    })
-    
-    return results_df
-
-
-def plot_validation_curve_rbf(X_train, y_train, X_val, y_val, n_centers_list=[5, 10, 15, 20, 30, 50],
-                               gamma=1.0, model_class=Ridge, alpha=1.0):
-    """
-    Vẽ validation curve: RMSE theo số RBF centers.
-    returns: results_df : DataFrame
-        RMSE cho mỗi n_centers
-    """
-    train_rmses = []
-    val_rmses = []
-    
-    for n_centers in n_centers_list:
-        # Transform
-        rbf = GaussianRBF(n_centers=n_centers, gamma=gamma)
-        X_train_rbf = rbf.fit_transform(X_train)
-        X_val_rbf = rbf.transform(X_val)
-        
-        # Fit model
-        model = model_class(alpha=alpha, max_iter=10000)
-        model.fit(X_train_rbf, y_train)
-        
-        # Evaluate
-        train_rmse = np.sqrt(mean_squared_error(y_train, model.predict(X_train_rbf)))
-        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val_rbf)))
-        
-        train_rmses.append(train_rmse)
-        val_rmses.append(val_rmse)
-    
-    # Plot
-    plt.figure(figsize=(10, 6))
-    plt.plot(n_centers_list, train_rmses, 'o-', linewidth=2, markersize=8, label='Train RMSE', color='#2ca02c')
-    plt.plot(n_centers_list, val_rmses, 's-', linewidth=2, markersize=8, label='Validation RMSE', color='#d62728')
-    
-    plt.xlabel('Số hàm cơ sở', fontsize=11, fontweight='bold')
-    plt.ylabel('RMSE', fontsize=11, fontweight='bold')
-    plt.title(f'Validation Curve: RMSE theo số hàm cơ sở RBF (γ={gamma})', fontsize=13, fontweight='bold')
-    plt.legend(fontsize=10)
-    plt.grid(True, alpha=0.3)
-    plt.xticks(n_centers_list)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    # Return results table
-    results_df = pd.DataFrame({
-        'N_Centers': n_centers_list,
-        'Train_RMSE': train_rmses,
-        'Val_RMSE': val_rmses,
-        'Overfitting_Gap': [val - train for train, val in zip(train_rmses, val_rmses)]
-    })
-    
-    return results_df
-
-
-def plot_validation_curve_spline(X_train, y_train, X_val, y_val, n_knots_list=[3, 4, 5, 6, 7, 8, 10],
-                                  degree=3, model_class=Ridge, alpha=1.0):
-    """
-    Vẽ validation curve: RMSE theo số Spline knots.
-    returns results_df : DataFrame
-        RMSE cho mỗi n_knots
-    """
-    train_rmses = []
-    val_rmses = []
-    
-    for n_knots in n_knots_list:
-        # Transform
-        spline = SplineBasis(n_knots=n_knots, degree=degree)
-        X_train_spline = spline.fit_transform(X_train)
-        X_val_spline = spline.transform(X_val)
-        
-        # Fit model
-        model = model_class(alpha=alpha, max_iter=10000)
-        model.fit(X_train_spline, y_train)
-        
-        # Evaluate
-        train_rmse = np.sqrt(mean_squared_error(y_train, model.predict(X_train_spline)))
-        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val_spline)))
-        
-        train_rmses.append(train_rmse)
-        val_rmses.append(val_rmse)
-    
-    # Plot
-    plt.figure(figsize=(10, 6))
-    plt.plot(n_knots_list, train_rmses, 'o-', linewidth=2, markersize=8, label='Train RMSE', color='#9467bd')
-    plt.plot(n_knots_list, val_rmses, 's-', linewidth=2, markersize=8, label='Validation RMSE', color='#e377c2')
-    
-    plt.xlabel('Số knot điểm', fontsize=11, fontweight='bold')
-    plt.ylabel('RMSE', fontsize=11, fontweight='bold')
-    plt.title(f'Validation Curve: RMSE theo số Spline knots (degree={degree})', fontsize=13, fontweight='bold')
-    plt.legend(fontsize=10)
-    plt.grid(True, alpha=0.3)
-    plt.xticks(n_knots_list)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    # Return results table
-    results_df = pd.DataFrame({
-        'N_Knots': n_knots_list,
-        'Train_RMSE': train_rmses,
-        'Val_RMSE': val_rmses,
-        'Overfitting_Gap': [val - train for train, val in zip(train_rmses, val_rmses)]
-    })
-    
-    return results_df
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# D. EVALUATION METRICS — Tất cả mô hình
-# ════════════════════════════════════════════════════════════════════════════
-
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-
-
-def compute_metrics(y_true, y_pred, model_name="Model"):
-    """
-    Tính toàn bộ các chỉ số đánh giá cho bài toán hồi quy.
-    
-    Công thức:
-    - MSE = (1/N) * Σ(tₙ - yₙ)²
-    - RMSE = √MSE
-    - MAE = (1/N) * Σ|tₙ - yₙ|
-    - R² = 1 - SSres/SStot
-    """
-    y_true = np.asarray(y_true).flatten()
-    y_pred = np.asarray(y_pred).flatten()
-    
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
-    mae = mean_absolute_error(y_true, y_pred)
-    r2 = r2_score(y_true, y_pred)
-    
-    metrics = {
-        "MSE": mse,
-        "RMSE": rmse,
-        "MAE": mae,
-        "R²": r2
-    }
-    
-    return metrics
-
-
-def print_metrics(y_true, y_pred, model_name="Model", decimals=3):
-    """In ra các chỉ số đánh giá dạng bảng."""
-    metrics = compute_metrics(y_true, y_pred, model_name)
-    
-    print(f"\n{'='*60}")
-    print(f"  Kết quả đánh giá: {model_name}")
-    print(f"{'='*60}")
-    print(f"  Chỉ số              | Giá trị")
-    print(f"  {'-'*58}")
-    print(f"  MSE (Mean Sq. Err)  | {metrics['MSE']:>18,.{decimals}f}")
-    print(f"  RMSE (Sq. Root MSE) | {metrics['RMSE']:>18,.{decimals}f}")
-    print(f"  MAE (Mean Abs. Err) | {metrics['MAE']:>18,.{decimals}f}")
-    print(f"  R² (Coefficient)    | {metrics['R²']:>18.{decimals}f}")
-    print(f"{'='*60}\n")
-    
-    return metrics
-
-
-def evaluate_model_on_splits(model, X_train, X_val, X_test, y_train, y_val, y_test, 
-                             model_name="Model"):
-    """
-    Đánh giá mô hình trên cả 3 tập: train, val, test.
-    In ra bảng so sánh các chỉ số trên 3 tập.
-    """
-    y_train_pred = model.predict(X_train)
-    y_val_pred = model.predict(X_val)
-    y_test_pred = model.predict(X_test)
-    
-    metrics_train = compute_metrics(y_train, y_train_pred)
-    metrics_val = compute_metrics(y_val, y_val_pred)
-    metrics_test = compute_metrics(y_test, y_test_pred)
-    
-    print(f"\n{'='*80}")
-    print(f"  {model_name} — Đánh giá trên Train / Val / Test")
-    print(f"{'='*80}")
-    print(f"{'Chỉ số':<20} | {'Train':>18} | {'Val':>18} | {'Test':>18}")
-    print(f"{'-'*80}")
-    
-    for key in ['MSE', 'RMSE', 'MAE', 'R²']:
-        if key == 'R²':
-            print(f"{key:<20} | {metrics_train[key]:>18.4f} | {metrics_val[key]:>18.4f} | {metrics_test[key]:>18.4f}")
-        else:
-            print(f"{key:<20} | {metrics_train[key]:>18,.2f} | {metrics_val[key]:>18,.2f} | {metrics_test[key]:>18,.2f}")
-    
-    print(f"{'='*80}\n")
-    
+def compute_metrics(y_true, y_pred) -> dict:
+    """Tính MSE, RMSE, MAE, R²."""
+    residuals = y_true - y_pred
+    ss_res = (residuals ** 2).sum()
+    ss_tot = ((y_true - y_true.mean()) ** 2).sum()
     return {
-        'train': metrics_train,
-        'val': metrics_val,
-        'test': metrics_test
+        "MSE" : round(np.mean(residuals**2), 2),
+        "RMSE": round(np.sqrt(np.mean(residuals**2)), 2),
+        "MAE" : round(np.mean(np.abs(residuals)), 2),
+        "R²"  : round(1 - ss_res / ss_tot, 4),
     }
 
 
-def compare_models_on_test(models_dict, X_test, y_test):
-    """So sánh nhiều mô hình trên tập test."""
-    results = []
-    
-    for model_name, model in models_dict.items():
-        y_pred = model.predict(X_test)
-        metrics = compute_metrics(y_test, y_pred, model_name)
-        metrics['Model'] = model_name
-        results.append(metrics)
-    
-    df_results = pd.DataFrame(results)
-    df_results = df_results[['Model', 'MSE', 'RMSE', 'MAE', 'R²']]
-    
-    print(f"\n{'='*85}")
-    print(f"  SO SÁNH CÁC MÔ HÌNH TRÊN TẬP TEST")
-    print(f"{'='*85}")
-    print(df_results.to_string(index=False))
-    print(f"{'='*85}\n")
-    
-    return df_results
+#gd
 
-
-# ════════════════════════════════════════════════════════════════════════════
-# D.2 LEARNING CURVES, RESIDUAL PLOTS, PREDICTED VS ACTUAL
-# ════════════════════════════════════════════════════════════════════════════
-
-def plot_learning_curve(X_train, y_train, X_val, y_val, model_class, 
-                        param_dict, train_sizes=None, model_name="Model"):
+def minibatch_gd(X, y, batch_size=256, epochs=200,
+                 lr=0.01, schedule='cosine',
+                 lr_min=1e-4, drop=0.5, drop_every=50):
     """
-    Vẽ learning curve: RMSE theo số lượng mẫu training.
-    Kiểm tra underfitting/overfitting.
+    Mini-batch Gradient Descent cho Linear Regression.
+    Trả về w, history (loss theo epoch).
     """
-    if train_sizes is None:
-        train_sizes = np.linspace(0.1, 1.0, 10)
-    
-    train_sizes_abs = (train_sizes * len(X_train)).astype(int)
-    train_rmses = []
-    val_rmses = []
-    
-    for size in train_sizes_abs:
-        X_train_sub = X_train[:size]
-        y_train_sub = y_train[:size]
-        
-        model = model_class(**param_dict, max_iter=10000)
-        model.fit(X_train_sub, y_train_sub)
-        
-        train_rmse = np.sqrt(mean_squared_error(y_train_sub, model.predict(X_train_sub)))
-        val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val)))
-        
-        train_rmses.append(train_rmse)
-        val_rmses.append(val_rmse)
-    
-    fig, ax = plt.subplots(figsize=(11, 6))
-    ax.plot(train_sizes_abs, train_rmses, 'o-', linewidth=2.5, markersize=7,
-            label='Train RMSE', color='#1f77b4')
-    ax.plot(train_sizes_abs, val_rmses, 's-', linewidth=2.5, markersize=7,
-            label='Validation RMSE', color='#ff7f0e')
-    
-    ax.fill_between(train_sizes_abs, train_rmses, val_rmses, 
-                    where=np.array(val_rmses) > np.array(train_rmses),
-                    alpha=0.2, color='red', label='Overfitting zone')
-    
-    ax.set_xlabel('# Training samples', fontsize=11, fontweight='bold')
-    ax.set_ylabel('RMSE', fontsize=11, fontweight='bold')
-    ax.set_title(f'Learning Curve: {model_name}', fontsize=13, fontweight='bold')
-    ax.legend(fontsize=10)
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    safe_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
-    #plt.savefig(f"{PLOT_DIR}/learning_curve_{safe_name}.png", 
-    #            bbox_inches='tight', dpi=130)
-    plt.show()
-    
-    print(f"\nLearning Curve — {model_name}:")
-    print(f"  Train RMSE (cuối): {train_rmses[-1]:,.2f}")
-    print(f"  Val RMSE (cuối)  : {val_rmses[-1]:,.2f}")
-    print(f"  Overfitting gap  : {val_rmses[-1] - train_rmses[-1]:,.2f}")
+    n, d = X.shape
+    Phi = np.column_stack([np.ones(n), X])   # thêm bias
+    w = np.zeros(Phi.shape[1])               # khởi tạo w = 0
+    history = []
+    n_batches = max(1, n // batch_size)
+
+    for epoch in range(epochs):
+        # Shuffle dữ liệu mỗi epoch
+        idx = np.random.permutation(n)
+        Phi_s, y_s = Phi[idx], y[idx]
+
+        # Learning rate schedule
+        if schedule == 'step':
+            lr_t = lr * (drop ** (epoch // drop_every))
+        elif schedule == 'cosine':
+            lr_t = lr_min + 0.5*(lr - lr_min)*(1 + np.cos(np.pi * epoch / epochs))
+        else:
+            lr_t = lr  # constant
+
+        # Mini-batch updates
+        for b in range(n_batches):
+            Phi_b = Phi_s[b*batch_size : (b+1)*batch_size]
+            y_b   = y_s  [b*batch_size : (b+1)*batch_size]
+            grad = -Phi_b.T @ (y_b - Phi_b @ w) / len(y_b)
+            w = w - lr_t * grad
+
+        # Ghi loss sau mỗi epoch (trên toàn train)
+        loss = np.mean((y - Phi[:,1:] @ w[1:] - w[0])**2)
+        history.append(loss)
+
+    return w, history
 
 
-def plot_residuals(y_true, y_pred, model_name="Model"):
-    """
-    Vẽ 3 biểu đồ kiểm tra phần dư:
-    1. Residuals vs Predicted (ngẫu nhiên?)
-    2. Q-Q Plot (chuẩn không?)
-    3. Histogram residuals (phân phối)
-    """
-    residuals = np.asarray(y_true).flatten() - np.asarray(y_pred).flatten()
-    
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    
-    # 1. Residuals vs Predicted
+def plot_residuals(y_true, y_pred, model_name='OLS', save=True):
+    """Residual plot + QQ-plot để kiểm tra giả thiết Gauss-Markov."""
+    residuals = y_true - y_pred
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    # --- Residual vs Fitted
     ax1 = axes[0]
-    ax1.scatter(y_pred, residuals, alpha=0.5, s=20, color='teal', edgecolors='none')
-    ax1.axhline(0, color='red', linestyle='--', linewidth=2)
-    ax1.set_xlabel('Predicted values ($)', fontsize=10)
-    ax1.set_ylabel('Residuals ($)', fontsize=10)
-    ax1.set_title('1. Residuals vs Predicted\n(Phải ngẫu nhiên ≈ 0)', fontsize=11, fontweight='bold')
-    ax1.grid(True, alpha=0.3)
-    
-    # 2. Q-Q Plot
+    ax1.scatter(y_pred, residuals, alpha=0.15, s=6, color='#4C78A8')
+    ax1.axhline(0, color='#E45756', linewidth=1.5, linestyle='--')
+    ax1.set_xlabel('Fitted values ($)')
+    ax1.set_ylabel('Residuals ($)')
+    ax1.set_title(f'Residual plot — {model_name}')
+    ax1.xaxis.set_major_formatter(plt.FuncFormatter(lambda x,_: f'${int(x/1000)}k'))
+    ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x,_: f'${int(x/1000)}k'))
+
+    # --- QQ-plot
     ax2 = axes[1]
-    scipy_stats = __import__('scipy').stats
-    scipy_stats.probplot(residuals, dist="norm", plot=ax2)
-    ax2.set_title('2. Q-Q Plot\n(Trên đường 45° = chuẩn)', fontsize=11, fontweight='bold')
-    ax2.grid(True, alpha=0.3)
-    
-    # 3. Histogram
-    '''
-    ax3 = axes[2]
-    ax3.hist(residuals, bins=40, color='skyblue', edgecolor='black', 
-             density=True, alpha=0.7)
-    mu, sigma = residuals.mean(), residuals.std()
-    x = np.linspace(residuals.min(), residuals.max(), 100)
-    scipy_stats = __import__('scipy').stats
-    ax3.plot(x, scipy_stats.norm.pdf(x, mu, sigma), 'r-', linewidth=2, label='Normal dist')
-    ax3.set_xlabel('Residual value ($)', fontsize=10)
-    ax3.set_ylabel('Density', fontsize=10)
-    ax3.set_title('3. Histogram Residuals\n(Hình chuông = tốt)', fontsize=11, fontweight='bold')
-    ax3.legend(fontsize=9)
-    ax3.grid(True, alpha=0.3, axis='y')
-    '''
+    from scipy.stats import probplot
+    probplot(residuals, dist='norm', plot=ax2)
+    ax2.set_title(f'QQ-plot — {model_name}')
+    ax2.get_lines()[0].set(markersize=2, alpha=0.3, color='#4C78A8')
+    ax2.get_lines()[1].set(color='#E45756', linewidth=1.5)
 
-    fig.suptitle(f'Residual Analysis — {model_name}', fontsize=13, fontweight='bold')
     plt.tight_layout()
-    safe_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
-    # plt.savefig(f"{PLOT_DIR}/residuals_{safe_name}.png", 
-    #            bbox_inches='tight', dpi=130)
+    if save:
+        plt.savefig(f'plots/residuals_{model_name}.png', bbox_inches='tight')
     plt.show()
 
-
-def plot_predicted_vs_actual(y_true, y_pred, model_name="Model"):
-    """Vẽ biểu đồ Predicted vs Actual."""
-    y_true = np.asarray(y_true).flatten()
-    y_pred = np.asarray(y_pred).flatten()
-    
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    ax.scatter(y_true, y_pred, alpha=0.5, s=30, color='#1f77b4', edgecolors='none')
-    
-    min_val = min(y_true.min(), y_pred.min())
-    max_val = max(y_true.max(), y_pred.max())
-    ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2.5, label='Perfect prediction')
-    
-    ax.set_xlabel('Actual values ($)', fontsize=11, fontweight='bold')
-    ax.set_ylabel('Predicted values ($)', fontsize=11, fontweight='bold')
-    ax.set_title(f'Predicted vs Actual — {model_name}', fontsize=13, fontweight='bold')
-    
-    r2 = r2_score(y_true, y_pred)
-    ax.text(0.05, 0.95, f'R² = {r2:.4f}', transform=ax.transAxes,
-            fontsize=11, verticalalignment='top',
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    
-    ax.legend(fontsize=10)
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    safe_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
-    # plt.savefig(f"{PLOT_DIR}/predicted_vs_actual_{safe_name}.png", 
-    #            bbox_inches='tight', dpi=130)
-    plt.show()
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# D.3 K-FOLD CROSS-VALIDATION & STATISTICAL TESTS
-# ════════════════════════════════════════════════════════════════════════════
-
-def evaluate_with_kfold(X, y, model_class, param_dict, k=10, model_name="Model"):
-    """
-    K-Fold Cross-Validation để tính mean ± std cho từng chỉ số.
-    """
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    
-    results = {
-        'MSE': [], 'RMSE': [], 'MAE': [], 'R²': []
-    }
-    
-    for train_idx, test_idx in kf.split(X):
-        X_train_fold, X_test_fold = X[train_idx], X[test_idx]
-        y_train_fold, y_test_fold = y[train_idx], y[test_idx]
-        
-        model = model_class(**param_dict, max_iter=10000)
-        model.fit(X_train_fold, y_train_fold)
-        
-        y_pred = model.predict(X_test_fold)
-        
-        metrics = compute_metrics(y_test_fold, y_pred)
-        for key in results.keys():
-            results[key].append(metrics[key])
-    
-    stats_dict = {}
-    for key in results.keys():
-        values = np.array(results[key])
-        stats_dict[key] = (values.mean(), values.std())
-    
-    print(f"\n{'='*85}")
-    print(f"  {k}-FOLD CROSS-VALIDATION — {model_name}")
-    print(f"{'='*85}")
-    print(f"{'Chỉ số':<20} | {'Mean':>20} | {'Std':>20}")
-    print(f"{'-'*85}")
-    
-    for key in ['MSE', 'RMSE', 'MAE', 'R²']:
-        mean_val, std_val = stats_dict[key]
-        if key == 'R²':
-            print(f"{key:<20} | {mean_val:>20.4f} | {std_val:>20.4f}")
-        else:
-            print(f"{key:<20} | {mean_val:>20,.2f} | {std_val:>20,.2f}")
-    
-    print(f"{'='*85}\n")
-    
-    return stats_dict
-
-
-def perform_kfold_cv_comprehensive(X, y, model_configs, k=10):
-    """
-    Perform k-fold CV cho multiple models
-    
-    Parameters:
-    - X: base features (dùng để tạo fold indices)
-    - y: target
-    - model_configs: dict với format {model_name: (model_class, params, X_data_func)}
-                     X_data_func là function để lấy X phù hợp cho từng model
-    - k: số folds
-    
-    Returns: dict chứa kết quả CV cho mỗi model
-    """
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    results = {}
-    
-    for model_name, (model_class, params, X_func) in model_configs.items():
-        mse_scores = []
-        rmse_scores = []
-        mae_scores = []
-        r2_scores = []
-        
-        for train_idx, val_idx in kf.split(X):
-            # Lấy X_data phù hợp cho model này
-            X_train_fold, X_val_fold = X_func(train_idx, val_idx)
-            y_train_fold = y[train_idx]
-            y_val_fold = y[val_idx]
-            
-            # Khởi tạo và huấn luyện model
-            if model_class == LinearRegression:
-                model = model_class()
-            else:
-                model = model_class(**params)
-            
-            # Xử lý WLS: tính weights từ train fold
-            if model_name == "2. WLS":
-                ols_temp = LinearRegression()
-                ols_temp.fit(X_train_fold, y_train_fold)
-                residuals_temp = y_train_fold - ols_temp.predict(X_train_fold)
-                weights = 1.0 / (np.abs(residuals_temp) + 1e-5)
-                model.fit(X_train_fold, y_train_fold, sample_weight=weights)
-            else:
-                model.fit(X_train_fold, y_train_fold)
-            
-            # Dự đoán
-            y_pred_fold = model.predict(X_val_fold)
-            
-            # Tính metrics
-            mse_scores.append(mean_squared_error(y_val_fold, y_pred_fold))
-            rmse_scores.append(np.sqrt(mean_squared_error(y_val_fold, y_pred_fold)))
-            mae_scores.append(mean_absolute_error(y_val_fold, y_pred_fold))
-            r2_scores.append(r2_score(y_val_fold, y_pred_fold))
-        
-        # Tính mean ± std
-        results[model_name] = {
-            'MSE': f"{np.mean(mse_scores):.4f}±{np.std(mse_scores):.4f}",
-            'RMSE': f"{np.mean(rmse_scores):.4f}±{np.std(rmse_scores):.4f}",
-            'MAE': f"{np.mean(mae_scores):.4f}±{np.std(mae_scores):.4f}",
-            'R²': f"{np.mean(r2_scores):.4f}±{np.std(r2_scores):.4f}"
-        }
-    
-    return results
-
-
-def statistical_test_paired(y_true, y_pred_model1, y_pred_model2, 
-                            model1_name="Model 1", model2_name="Model 2", 
-                            test_type='t-test'):
-    """
-    Kiểm định thống kê paired: So sánh 2 mô hình.
-    test_type: 't-test' | 'wilcoxon'
-    """
-    scipy_stats = __import__('scipy').stats
-    
-    y_true = np.asarray(y_true).flatten()
-    y_pred_model1 = np.asarray(y_pred_model1).flatten()
-    y_pred_model2 = np.asarray(y_pred_model2).flatten()
-    
-    error1 = np.abs(y_true - y_pred_model1)
-    error2 = np.abs(y_true - y_pred_model2)
-    
-    print(f"\n{'='*90}")
-    print(f"  KIỂM ĐỊNH THỐNG KÊ (PAIRED) — {test_type.upper()}")
-    print(f"  So sánh: {model1_name} vs {model2_name}")
-    print(f"{'='*90}")
-    
-    if test_type.lower() == 't-test':
-        t_stat, p_value = scipy_stats.ttest_rel(error1, error2)
-        test_name = "Paired t-test"
-    elif test_type.lower() == 'wilcoxon':
-        w_stat, p_value = scipy_stats.wilcoxon(error1, error2)
-        t_stat = w_stat
-        test_name = "Wilcoxon signed-rank test"
-    else:
-        raise ValueError("test_type must be 't-test' or 'wilcoxon'")
-    
-    print(f"\n  Test statistic      : {t_stat:.6f}")
-    print(f"  p-value             : {p_value:.6f}")
-    print(f"\n  Mean Absolute Error (MAE):")
-    print(f"    {model1_name:<20} : {error1.mean():>15,.2f} ± {error1.std():>15,.2f}")
-    print(f"    {model2_name:<20} : {error2.mean():>15,.2f} ± {error2.std():>15,.2f}")
-    print(f"    Hiệu khác           : {abs(error1.mean() - error2.mean()):>15,.2f}")
-    
-    alpha = 0.05
-    if p_value < alpha:
-        better_model = model2_name if error2.mean() < error1.mean() else model1_name
-        conclusion = f"CÓ SỰ KHÁC BIỆT CÓ Ý NGHĨA (p = {p_value:.6f} < {alpha})"
-        conclusion += f"\n  → {better_model} tốt hơn"
-    else:
-        conclusion = f"KHÔNG CÓ sự khác biệt (p = {p_value:.6f} ≥ {alpha})"
-    
-    print(f"\n  Kết luận (α = {alpha}):")
-    print(f"  {conclusion}")
-    print(f"{'='*90}\n")
-    
-    return {
-        'test': test_name,
-        'statistic': t_stat,
-        'p_value': p_value,
-        'significant': p_value < alpha,
-        'conclusion': conclusion
-    }
+    print(f"Residuals — mean: {residuals.mean():.2f}  std: {residuals.std():.2f}")
