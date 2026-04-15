@@ -430,8 +430,8 @@ def plot_loss_and_cm(losses, y_true, y_pred, n_classes=2,
     cm = confusion_matrix(y_true, y_pred, n_classes=n_classes)
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[1],
                 xticklabels=class_labels, yticklabels=class_labels)
-    axes[1].set_title(f'Confusion Matrix{" \u2013 " + title if title else ""}',
-                      fontsize=12, fontweight='bold')
+    title_suffix = f' - {title}' if title else ''
+    axes[1].set_title(f'Confusion Matrix{title_suffix}', fontsize=12, fontweight='bold')
     axes[1].set_xlabel('Predicted')
     axes[1].set_ylabel('True')
     plt.tight_layout()
@@ -529,11 +529,44 @@ def plot_gradient_loss_curves(loss_models, styles=None,
     """Plot loss curves for multiple gradient-based models.
     loss_models = {name: clf} where clf has a .losses attribute.
     """
-    if styles is None:
-        styles = ['b-', 'r-o', 'g-', 'm-', 'c-', 'k--']
+    if not loss_models:
+        raise ValueError('loss_models is empty')
+
     fig, ax = plt.subplots(figsize=figsize)
-    for (name, clf), sty in zip(loss_models.items(), styles):
-        ax.plot(clf.losses, sty, lw=2, ms=4, label=name)
+
+    if styles is None:
+        # Use staggered markers so near-identical curves remain distinguishable.
+        palette = plt.rcParams['axes.prop_cycle'].by_key().get('color', ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'])
+        line_styles = ['-', '--', '-.', ':']
+        markers = ['o', 's', '^', 'D', 'v', 'P', 'X', '*', '<', '>']
+
+        for i, (name, clf) in enumerate(loss_models.items()):
+            losses = np.asarray(getattr(clf, 'losses', []), dtype=float)
+            if losses.size == 0:
+                raise ValueError(f"Model '{name}' has no losses to plot")
+
+            mark_step = max(1, losses.size // 12)
+            mark_start = i % mark_step
+            ax.plot(
+                losses,
+                color=palette[i % len(palette)],
+                linestyle=line_styles[(i // len(palette)) % len(line_styles)],
+                marker=markers[i % len(markers)],
+                lw=2,
+                ms=4,
+                markevery=(mark_start, mark_step),
+                alpha=0.95,
+                label=name,
+            )
+    else:
+        if len(styles) == 0:
+            raise ValueError('styles must be a non-empty list when provided')
+        for i, (name, clf) in enumerate(loss_models.items()):
+            losses = np.asarray(getattr(clf, 'losses', []), dtype=float)
+            if losses.size == 0:
+                raise ValueError(f"Model '{name}' has no losses to plot")
+            sty = styles[i % len(styles)]
+            ax.plot(losses, sty, lw=2, ms=4, label=name)
     ax.set(xlabel='Epoch', ylabel='Cross-Entropy Loss', title=title)
     ax.legend(fontsize=9)
     ax.grid(alpha=0.4)
@@ -546,19 +579,43 @@ def plot_calibration_curves(calib_models, y_true, n_bins=10, figsize=(15, 5)):
     calib_models = [(name, y_proba), ...]
     """
     from sklearn.calibration import calibration_curve as _calib_curve
-    fig, axes = plt.subplots(1, len(calib_models), figsize=figsize)
-    if len(calib_models) == 1:
-        axes = [axes]
-    for ax, (name, ypr) in zip(axes, calib_models):
+
+    n_models = len(calib_models)
+    if n_models == 0:
+        raise ValueError('calib_models is empty')
+
+    # Split into 2 rows for many models to avoid title/legend overlap.
+    n_rows = 2 if n_models > 4 else 1
+    n_cols = int(np.ceil(n_models / n_rows))
+
+    # Keep backward-compatible default but scale height when split into 2 rows.
+    if figsize == (15, 5) and n_rows == 2:
+        figsize = (3.6 * n_cols, 4.2 * n_rows)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False)
+    axes_flat = axes.ravel()
+
+    for i, (ax, (name, ypr)) in enumerate(zip(axes_flat, calib_models)):
         fraction_pos, mean_pred = _calib_curve(y_true, ypr, n_bins=n_bins)
-        ax.plot(mean_pred, fraction_pos, 'o-', color='b', lw=2, ms=6, label=name)
-        ax.plot([0, 1], [0, 1], 'k--', lw=1.5, label='Perfect calibration')
-        ax.set(xlabel='Mean Predicted Probability', ylabel='Fraction of Positives',
-               title=f'Reliability Diagram \u2013 {name}')
-        ax.legend(fontsize=10)
+        ax.plot(mean_pred, fraction_pos, 'o-', color='b', lw=2, ms=5)
+        ax.plot([0, 1], [0, 1], 'k--', lw=1.5)
+        ax.set_title(name, fontsize=11, fontweight='bold')
+
+        row_i = i // n_cols
+        col_i = i % n_cols
+        if row_i == n_rows - 1:
+            ax.set_xlabel('Mean Predicted Probability')
+        if col_i == 0:
+            ax.set_ylabel('Fraction of Positives')
+
         ax.grid(alpha=0.4)
-    plt.suptitle('Calibration Analysis (Reliability Diagrams)', fontsize=13, fontweight='bold')
-    plt.tight_layout()
+
+    # Hide any unused subplot axes.
+    for ax in axes_flat[n_models:]:
+        ax.axis('off')
+
+    fig.suptitle('Calibration Analysis (Reliability Diagrams)', fontsize=13, fontweight='bold')
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
 
@@ -904,51 +961,51 @@ class OneVsRestClassifier:
         return np.argmax(probs, axis=1)
 
 
-    class OneVsOneClassifier:
-        """One-vs-One Multi-class Strategy with Voting"""
+class OneVsOneClassifier:
+    """One-vs-One Multi-class Strategy with Voting"""
+    
+    def __init__(self, learning_rate=0.01, n_iterations=1000):
+        self.learning_rate = learning_rate
+        self.n_iterations = n_iterations
+        self.classifiers = {}
+        self.n_classes = None
+        self.training_time = 0
         
-        def __init__(self, learning_rate=0.01, n_iterations=1000):
-            self.learning_rate = learning_rate
-            self.n_iterations = n_iterations
-            self.classifiers = {}
-            self.n_classes = None
-            self.training_time = 0
-            
-        def fit(self, X, y):
-            start_time = time.time()
-            
-            self.n_classes = int(np.max(y)) + 1
-            self.classifiers = {}
-            
-            # Train for each pair
-            for i in range(self.n_classes):
-                for j in range(i + 1, self.n_classes):
-                    mask = (y == i) | (y == j)
-                    X_pair = X[mask]
-                    y_pair = y[mask]
-                    
-                    # Binary: i=0, j=1
-                    y_binary = (y_pair == j).astype(int)
-                    
-                    clf = LogisticRegressionGD(
-                        learning_rate=self.learning_rate,
-                        n_iterations=self.n_iterations
-                    )
-                    clf.fit(X_pair, y_binary)
-                    self.classifiers[(i, j)] = clf
-            
-            self.training_time = time.time() - start_time
+    def fit(self, X, y):
+        start_time = time.time()
         
-        def predict(self, X):
-            m = X.shape[0]
-            votes = np.zeros((m, self.n_classes))
-            
-            for (i, j), clf in self.classifiers.items():
-                preds = clf.predict(X)
-                votes[preds == 0, i] += 1
-                votes[preds == 1, j] += 1
-            
-            return np.argmax(votes, axis=1)
+        self.n_classes = int(np.max(y)) + 1
+        self.classifiers = {}
+        
+        # Train for each pair
+        for i in range(self.n_classes):
+            for j in range(i + 1, self.n_classes):
+                mask = (y == i) | (y == j)
+                X_pair = X[mask]
+                y_pair = y[mask]
+                
+                # Binary: i=0, j=1
+                y_binary = (y_pair == j).astype(int)
+                
+                clf = LogisticRegressionGD(
+                    learning_rate=self.learning_rate,
+                    n_iterations=self.n_iterations
+                )
+                clf.fit(X_pair, y_binary)
+                self.classifiers[(i, j)] = clf
+        
+        self.training_time = time.time() - start_time
+    
+    def predict(self, X):
+        m = X.shape[0]
+        votes = np.zeros((m, self.n_classes))
+        
+        for (i, j), clf in self.classifiers.items():
+            preds = clf.predict(X)
+            votes[preds == 0, i] += 1
+            votes[preds == 1, j] += 1
+        
+        return np.argmax(votes, axis=1)
 
 
 class LinearDiscriminantAnalysis:
