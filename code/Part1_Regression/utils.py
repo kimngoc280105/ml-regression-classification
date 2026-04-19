@@ -153,8 +153,8 @@ def plot_target_distribution(df: pd.DataFrame,
              ha="center", color="#E45756", fontsize=10)
 
     plt.tight_layout()
-    if save:
-        plt.savefig(f"{PLOT_DIR}/target_distribution.png", bbox_inches="tight")
+    # if save:
+        # plt.savefig(f"{PLOT_DIR}/target_distribution.png", bbox_inches="tight")
     plt.show()
     print(f"\nThống kê {target}:")
     print(y.describe().round(2).to_string())
@@ -183,8 +183,8 @@ def plot_correlation_matrix(df: pd.DataFrame,
                 annot_kws={"size": 9})
     ax.set_title("Ma trận tương quan (sắp xếp theo |corr| với target)", fontweight="bold")
     plt.tight_layout()
-    if save:
-        plt.savefig(f"{PLOT_DIR}/correlation_matrix.png", bbox_inches="tight")
+    # if save:
+        # plt.savefig(f"{PLOT_DIR}/correlation_matrix.png", bbox_inches="tight")
     plt.show()
 
     target_corr = corr[target].drop(target).sort_values(key=abs, ascending=False)
@@ -227,8 +227,8 @@ def plot_scatter_features(df: pd.DataFrame,
 
     fig.suptitle("Scatter plots: Features vs Target", fontsize=13, fontweight="bold")
     plt.tight_layout()
-    if save:
-        plt.savefig(f"{PLOT_DIR}/scatter_features.png", bbox_inches="tight")
+    # if save:
+        # plt.savefig(f"{PLOT_DIR}/scatter_features.png", bbox_inches="tight")
     plt.show()
 
 
@@ -292,8 +292,8 @@ def report_outliers(df: pd.DataFrame,
 
     fig.suptitle("Boxplots — Phát hiện Outliers", fontsize=13, fontweight="bold")
     plt.tight_layout()
-    if save:
-        plt.savefig(f"{PLOT_DIR}/outlier_boxplots.png", bbox_inches="tight")
+    #if save:
+        # plt.savefig(f"{PLOT_DIR}/outlier_boxplots.png", bbox_inches="tight")
     plt.show()
 
     return result_df
@@ -439,8 +439,8 @@ def plot_split_distribution(y_train, y_val, y_test,
     fig.suptitle("Phân bố target trong 3 tập — kiểm tra stratification",
                  fontsize=12, fontweight="bold")
     plt.tight_layout()
-    if save:
-        plt.savefig(f"{PLOT_DIR}/split_distribution.png", bbox_inches="tight")
+    # if save:
+        # plt.savefig(f"{PLOT_DIR}/split_distribution.png", bbox_inches="tight")
     plt.show()
 
 
@@ -581,7 +581,7 @@ def plot_regularization_path(X_train, y_train, alphas, feature_names,
     ax.invert_xaxis()  # trái = ít regularization, phải = nhiều
     plt.tight_layout()
 
-    plt.savefig(f"{PLOT_DIR}/{model_class.__name__.lower()}_regularization_path.png", bbox_inches="tight")
+    # plt.savefig(f"{PLOT_DIR}/{model_class.__name__.lower()}_regularization_path.png", bbox_inches="tight")
     plt.show()
 
 
@@ -725,7 +725,7 @@ def plot_elastic_net_heatmap(X_train, y_train, alphas_en, l1_ratios, k=3):
     ax.legend(loc='upper right', fontsize=9)
 
     plt.tight_layout()
-    plt.savefig(f"{PLOT_DIR}/elastic_net.png", bbox_inches="tight")
+    # plt.savefig(f"{PLOT_DIR}/elastic_net.png", bbox_inches="tight")
     plt.show()
 
     return rmse_matrix, best_en, results_en
@@ -770,7 +770,7 @@ def plot_feature_selection_comparison(fwd_names, fwd_scores, bwd_names, bwd_scor
                     f'{rmse:,.0f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
     
     plt.tight_layout()
-    plt.savefig(f"{PLOT_DIR}/feature_selection.png", bbox_inches="tight")
+    # plt.savefig(f"{PLOT_DIR}/feature_selection.png", bbox_inches="tight")
     plt.show()
 
 
@@ -1222,8 +1222,8 @@ def plot_learning_curve(X_train, y_train, X_val, y_val, model_class,
     
     plt.tight_layout()
     safe_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
-    plt.savefig(f"{PLOT_DIR}/learning_curve_{safe_name}.png", 
-                bbox_inches='tight', dpi=130)
+    #plt.savefig(f"{PLOT_DIR}/learning_curve_{safe_name}.png", 
+    #            bbox_inches='tight', dpi=130)
     plt.show()
     
     print(f"\nLearning Curve — {model_name}:")
@@ -1278,8 +1278,8 @@ def plot_residuals(y_true, y_pred, model_name="Model"):
     fig.suptitle(f'Residual Analysis — {model_name}', fontsize=13, fontweight='bold')
     plt.tight_layout()
     safe_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
-    plt.savefig(f"{PLOT_DIR}/residuals_{safe_name}.png", 
-                bbox_inches='tight', dpi=130)
+    # plt.savefig(f"{PLOT_DIR}/residuals_{safe_name}.png", 
+    #            bbox_inches='tight', dpi=130)
     plt.show()
 
 
@@ -1310,8 +1310,8 @@ def plot_predicted_vs_actual(y_true, y_pred, model_name="Model"):
     
     plt.tight_layout()
     safe_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
-    plt.savefig(f"{PLOT_DIR}/predicted_vs_actual_{safe_name}.png", 
-                bbox_inches='tight', dpi=130)
+    # plt.savefig(f"{PLOT_DIR}/predicted_vs_actual_{safe_name}.png", 
+    #            bbox_inches='tight', dpi=130)
     plt.show()
 
 
