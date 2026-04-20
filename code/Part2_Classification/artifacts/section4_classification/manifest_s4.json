@@ -1,0 +1,26 @@
+{
+  "fixed_seeds": [
+    13,
+    42,
+    77,
+    123,
+    2026
+  ],
+  "split_ratios": [
+    "60/40",
+    "70/30",
+    "80/20"
+  ],
+  "noise_sigmas": [
+    0.1,
+    0.5,
+    1.0
+  ],
+  "corruption_levels": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "artifacts_dir": "artifacts\\section4_classification",
+  "notes": "Run notebook from top to bottom for full reproducibility."
+}

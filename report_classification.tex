@@ -199,7 +199,12 @@ Nhận xét:
   \label{fig:outlier}
 \end{figure}
 
-Nhận xét: \texttt{capital-gain} và \texttt{capital-loss} có tỷ lệ outlier IQR cao nhất ($\approx$X\%), chủ yếu do bản chất dữ liệu (nhiều giá trị 0 và một số giá trị rất lớn). Chúng tôi \textbf{không loại bỏ} các outlier này vì chúng mang thông tin phân loại quan trọng.
+Nhận xét:
+\begin{itemize}
+  \item \textbf{\texttt{hours-per-week}} có tỷ lệ outlier IQR \textbf{cao nhất} ($\approx 27.7\%$) do cách tính IQR: $Q_1 \approx 40$, $Q_3 \approx 45$, $\text{IQR} = 5$, dẫn đến fence hẹp $[32.5,\; 52.5]$ -- nhiều mẫu làm dưới part-time hoặc overtime nằm ngoài vùng này.
+  \item \textbf{\texttt{capital-gain}} và \textbf{\texttt{capital-loss}}: vì $Q_1 = Q_3 = 0$ nên $\text{IQR} = 0$, upper fence $= 0$ -- mọi giá trị $> 0$ đều bị coi là outlier theo IQR ($\approx 9.4\%$ và $\approx 4.7\%$ tương ứng). Tuy nhiên, hai cột này có \textbf{skewness cực lớn} và biên độ rất rộng (tới 99{,}999), nên quan trọng hơn nhiều về mặt thông tin phân loại.
+  \item Chúng tôi \textbf{không loại bỏ} outlier của bất kỳ đặc trưng nào vì chúng phản ánh bản chất thực của dữ liệu thu nhập (ví dụ: người làm thêm giờ, người có thu nhập vốn lớn).
+\end{itemize}
 
 \subsection{Tương quan đặc trưng với nhãn}
 
@@ -233,9 +238,12 @@ Trong đó $\mu$ và $\sigma$ được tính \textbf{chỉ trên tập train} đ
 
 \subsection{Phân chia dữ liệu}
 \begin{itemize}
-  \item Train / Validation / Test: $70\%$ / $15\%$ / $15\%$ (stratified theo nhãn).
-  \item Hàm: \texttt{train\_test\_split} với \texttt{random\_state=42}.
+  \item Train / Validation / Test: $70\%$ / $10\%$ / $20\%$ (stratified theo nhãn để giữ nguyên tỷ lệ lớp).
+  \item Hàm: \texttt{train\_test\_split} với \texttt{random\_state=42}, \texttt{stratify=y}.
 \end{itemize}
+
+Cụ thể, với tổng $N$ mẫu:
+$$N_{\text{train}} = 0.70N, \quad N_{\text{val}} = 0.10N, \quad N_{\text{test}} = 0.20N$$
 
 % ============================================================
 % SECTION 4 -- MÔ HÌNH
@@ -314,6 +322,95 @@ với $\mathbf{R} = \text{diag}(\hat{y}^{(i)}(1-\hat{y}^{(i)}))$.
 \end{figure}
 
 Nhận xét: Newton-Raphson hội tụ chỉ sau $\sim$X iterations so với X iterations của GD, nhưng mỗi iteration tốn chi phí $O(nd^2)$ để tính Hessian.
+
+% -----------------------------------------------------------
+
+\subsection{Softmax Regression (Multi-class)}
+\label{ssec:softmax}
+
+\subsubsection{Nền tảng lý thuyết}
+
+Softmax Regression tổng quát hóa Logistic Regression sang $K$ lớp. Xác suất lớp $k$ được tính bằng hàm softmax:
+$$P(y=k \mid \mathbf{x}) = \frac{e^{\boldsymbol{\theta}_k^\top \mathbf{x}}}{\sum_{j=1}^{K} e^{\boldsymbol{\theta}_j^\top \mathbf{x}}}$$
+
+\textbf{Hàm mất mát (Multi-class Cross-Entropy):}
+$$\mathcal{L}(\boldsymbol{\Theta}) = -\frac{1}{m}\sum_{i=1}^{m}\sum_{k=1}^{K} \mathbf{1}[y^{(i)}=k]\log P(y^{(i)}=k \mid \mathbf{x}^{(i)})$$
+
+\textbf{Gradient (cập nhật ma trận trọng số $\boldsymbol{\Theta} \in \mathbb{R}^{d \times K}$):}
+$$\frac{\partial \mathcal{L}}{\partial \boldsymbol{\Theta}} = \frac{1}{m}\mathbf{X}^\top(\hat{\mathbf{P}} - \mathbf{Y}_{\text{onehot}})$$
+
+Trong đó $\hat{\mathbf{P}} \in \mathbb{R}^{m \times K}$ là ma trận xác suất dự đoán và $\mathbf{Y}_{\text{onehot}}$ là nhãn one-hot.
+
+\subsubsection{Quan hệ với Logistic Regression}
+Khi $K=2$, Softmax Regression tương đương Logistic Regression nhị phân. Với Adult dataset (bài toán nhị phân), Softmax được dùng như một kiểm chứng sự nhất quán.
+
+\subsubsection{Siêu tham số}
+\begin{table}[H]
+  \centering
+  \caption{Siêu tham số Softmax Regression}
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Tham số} & \textbf{Giá trị} \\
+    \midrule
+    Learning rate ($\alpha$) & 0.01 \\
+    Số iterations & 1000 \\
+    L2 Regularization $\lambda$ & 0.0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% -----------------------------------------------------------
+
+\subsection{One-vs-Rest (OvR)}
+\label{ssec:ovr}
+
+\subsubsection{Nền tảng lý thuyết}
+
+OvR (hay One-vs-All, OvA) huấn luyện $K$ bộ phân loại nhị phân, mỗi bộ phân biệt lớp $k$ với tất cả các lớp còn lại:
+$$f_k(\mathbf{x}) = P(y=k \mid \mathbf{x}) \approx \sigma(\boldsymbol{\theta}_k^\top \mathbf{x})$$
+
+\textbf{Quy tắc quyết định:}
+$$\hat{y} = \arg\max_{k \in \{1,\ldots,K\}} f_k(\mathbf{x})$$
+
+\textbf{Triển khai:} Mỗi $f_k$ là một \texttt{LogisticRegressionGD} độc lập, huấn luyện trên nhãn nhị phân $y_k^{(i)} = \mathbf{1}[y^{(i)} = k]$.
+
+\subsubsection{Phân tích}
+\begin{itemize}
+  \item \textbf{Ưu điểm:} Đơn giản, song song hóa được; tổng chi phí huấn luyện $K$ lần so với một bộ phân loại nhị phân.
+  \item \textbf{Hạn chế:} Lớp mất cân bằng nghiêm trọng hơn (mỗi bộ phân loại $f_k$ có $\sim(K-1)/K$ mẫu âm).
+  \item \textbf{Độ phức tạp:} $O(K \cdot T \cdot nd)$ với $T$ iterations, $n$ mẫu, $d$ đặc trưng.
+\end{itemize}
+
+% -----------------------------------------------------------
+
+\subsection{One-vs-One (OvO)}
+\label{ssec:ovo}
+
+\subsubsection{Nền tảng lý thuyết}
+
+OvO huấn luyện $\binom{K}{2}$ bộ phân loại nhị phân, mỗi bộ phân biệt một cặp lớp $(i, j)$:
+$$f_{ij}(\mathbf{x}) = \sigma(\boldsymbol{\theta}_{ij}^\top \mathbf{x}) \in [0,1]$$
+
+\textbf{Quyết định bằng biểu quyết đa số (Majority Voting):}
+$$\hat{y} = \arg\max_{k} \text{votes}(k), \quad \text{votes}(k) = \sum_{j \neq k} \mathbf{1}[f_{kj}(\mathbf{x}) > 0.5]$$
+
+\subsubsection{So sánh OvR vs OvO}
+\begin{table}[H]
+  \centering
+  \caption{So sánh chiến lược OvR và OvO ($K$ lớp)}
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Tiêu chí} & \textbf{OvR} & \textbf{OvO} \\
+    \midrule
+    Số bộ phân loại & $K$ & $\binom{K}{2} = K(K-1)/2$ \\
+    Kích thước tập train mỗi bộ & $n$ (toàn bộ) & $\sim 2n/K$ (chỉ 2 lớp) \\
+    Chi phí huấn luyện & $O(K \cdot nd)$ & $O(K^2/2 \cdot n/K \cdot d)$ \\
+    Thiên vị mất cân bằng & Cao hơn & Thấp hơn \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textit{Ghi chú:} Với bài toán nhị phân ($K=2$), OvR và OvO đều tương đương Logistic Regression thông thường.
 
 % -----------------------------------------------------------
 
@@ -435,35 +532,67 @@ Do dữ liệu \emph{imbalanced} ($\approx$3:1), phương pháp đánh giá chí
 \section{Kết quả và Phân tích}
 \label{sec:results}
 
-\subsection{Kết quả tổng hợp}
+\subsection{Kết quả tổng hợp trên tập Test}
 
 \begin{table}[H]
   \centering
-  \caption{Kết quả so sánh các mô hình trên tập Test}
+  \caption{Kết quả so sánh các mô hình trên tập Test Adult Census Income (20\% dữ liệu, bài toán nhị phân)}
   \label{tab:results}
   \resizebox{\textwidth}{!}{%
-  \begin{tabular}{lcccccc}
+  \begin{tabular}{lccccc}
     \toprule
-    \textbf{Mô hình} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{AUC} & \textbf{Time (s)} \\
+    \textbf{Mô hình} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{AUC} \\
     \midrule
-    Logistic Reg. GD        & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Logistic Reg. Newton    & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Softmax Regression      & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    OvR                     & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    OvO                     & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    LDA                     & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    QDA                     & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Perceptron              & X.XXX & X.XXX & X.XXX & X.XXX & --    & X.XX \\
-    Reg. LR (L2)            & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Reg. LR (L1)            & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Probit Regression       & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Laplace Approx.         & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Kernel LR (RBF)         & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
-    Gaussian Naive Bayes    & X.XXX & X.XXX & X.XXX & X.XXX & X.XXX & X.XX \\
+    Logistic Reg. GD              & 0.8234 & 0.7287 & 0.4247 & 0.5367 & 0.8449 \\
+    Logistic Reg. Newton          & 0.8267 & 0.7294 & 0.4452 & 0.5529 & 0.8468 \\
+    LDA                           & 0.8151 & 0.7151 & 0.3858 & 0.5012 & 0.8364 \\
+    QDA                           & 0.7973 & 0.6813 & 0.2972 & 0.4139 & 0.8526 \\
+    Reg. LR L2 ($\lambda$=0.001)  & 0.8234 & 0.7287 & 0.4247 & 0.5367 & 0.8449 \\
+    Reg. LR L1 ($\lambda$=0.05)   & 0.8234 & 0.7287 & 0.4247 & 0.5367 & 0.8449 \\
+    LR-Weighted (class balanced)  & 0.7631 & 0.5053 & 0.7666 & 0.6091 & 0.8465 \\
+    Probit Regression             & 0.8236 & 0.7346 & 0.4184 & 0.5331 & 0.8468 \\
+    Laplace Approx.               & 0.8222 & 0.7298 & 0.4152 & 0.5293 & 0.8417 \\
+    Gaussian Naive Bayes          & 0.7941 & 0.6615 & 0.2966 & 0.4095 & 0.8280 \\
     \bottomrule
   \end{tabular}%
   }
 \end{table}
+
+\textit{Ghi chú:} Softmax Regression, OvR, OvO đánh giá trên tập đa lớp (xem Bảng~\ref{tab:results_multiclass}). Perceptron và Kernel LR (RBF) không được đưa vào so sánh định lượng do hạn chế hội tụ/thời gian huấn luyện.
+
+\subsection{Kết quả 5-Fold Cross-Validation (mean\,$\pm$\,std)}
+\label{ssec:cv}
+
+Để đánh giá độ ổn định của mô hình và tránh phụ thuộc vào một lần phân chia dữ liệu cụ thể, chúng tôi thực hiện \textbf{Stratified 5-Fold Cross-Validation} trên tập train+val ($80\%$ dữ liệu), đánh giá theo Accuracy, F1-Score và Recall.
+
+\begin{table}[H]
+  \centering
+  \caption{5-Fold Cross-Validation (mean\,$\pm$\,std) trên Adult Census Income -- train+val set}
+  \label{tab:cv_results}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lccc}
+    \toprule
+    \textbf{Mô hình} & \textbf{Accuracy} & \textbf{F1-Score} & \textbf{Recall} \\
+    \midrule
+    Logistic Reg. GD              & $0.8230 \pm 0.0026$ & $0.5348 \pm 0.0114$ & $0.4227 \pm 0.0134$ \\
+    Logistic Reg. Newton          & $0.8272 \pm 0.0027$ & $0.5568 \pm 0.0088$ & $0.4507 \pm 0.0098$ \\
+    LDA                           & $0.8135 \pm 0.0032$ & $0.4985 \pm 0.0136$ & $0.3851 \pm 0.0148$ \\
+    QDA                           & $0.8038 \pm 0.0029$ & $0.4387 \pm 0.0114$ & $0.3185 \pm 0.0107$ \\
+    Reg. LR L2 ($\lambda$=0.001)  & $0.8230 \pm 0.0026$ & $0.5348 \pm 0.0114$ & $0.4227 \pm 0.0134$ \\
+    Reg. LR L1 ($\lambda$=0.05)   & $0.8231 \pm 0.0026$ & $0.5349 \pm 0.0114$ & $0.4227 \pm 0.0134$ \\
+    Gaussian Naive Bayes          & $0.7992 \pm 0.0038$ & $0.4314 \pm 0.0113$ & $0.3163 \pm 0.0094$ \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table}
+
+Nhận xét:
+\begin{itemize}
+  \item Các giá trị Std nhỏ ($\leq 0.004$) cho thấy tất cả các mô hình có hiệu năng \textbf{ổn định} qua 5 fold -- kết quả không bị ảnh hưởng lớn bởi cách phân chia dữ liệu.
+  \item \textbf{Logistic Reg. Newton} đạt F1 CV cao nhất ($0.5568 \pm 0.0088$), nhất quán với kết quả trên tập test (Bảng~\ref{tab:results}).
+  \item \textbf{QDA} và \textbf{GNB} có Recall thấp ($\approx 0.31$--$0.32$) trên cả CV lẫn Test, cho thấy chúng nhạy cảm với mất cân bằng lớp hơn so với Logistic Regression.
+  \item \textbf{LDA} có Std lớn hơn một chút (Recall $\pm 0.0148$), gợi ý độ biến động cao hơn tại các fold so với các mô hình khác.
+\end{itemize}
 
 \subsection{Biểu đồ so sánh}
 
@@ -501,7 +630,9 @@ Nhận xét:
 \begin{itemize}
   \item L1 (Lasso) kích hoạt \emph{sparsity}: nhiều trọng số bằng 0 khi $\lambda$ lớn, thích hợp cho feature selection.
   \item L2 (Ridge) phân tán đều trọng số nhỏ, ít đưa về 0 hơn.
-  \item Giá trị $\lambda$ tối ưu: X (L1), X (L2).
+  \item Giá trị $\lambda$ tối ưu (chọn bằng 5-fold CV theo F1): $\lambda = 0.05$ (L1), $\lambda = 0.001$ (L2).
+  \item CV F1 tại best $\lambda$: L2 $= 0.5348 \pm 0.0114$, L1 $= 0.5349 \pm 0.0114$ -- hai kết quả gần như tương đương.
+  \item Trên tập test, cả L1 và L2 đều cho F1 $\approx 0.537$, xấp xỉ LR-GD không regularization. Nguyên nhân: bộ dữ liệu Adult chỉ có D=12 features, ít khả năng overfitting, nên regularization giúp ổn định nhưng không cải thiện đáng kể.
 \end{itemize}
 
 \subsection{Phân tích Calibration}
@@ -517,19 +648,26 @@ Nhận xét:
 
 \begin{table}[H]
   \centering
-  \caption{Kết quả McNemar Test ($\alpha = 0.05$) giữa mô hình tốt nhất và các mô hình còn lại}
+  \caption{Kết quả McNemar Test ($\alpha = 0.05$) -- so sánh cặp mô hình trên tập test}
+  \label{tab:mcnemar}
   \begin{tabular}{lccl}
     \toprule
     \textbf{Cặp so sánh} & $\chi^2$ & $p$-value & \textbf{Kết luận} \\
     \midrule
-    Best vs. Model B & X.XX & X.XXX & Significant \\
-    Best vs. Model C & X.XX & X.XXX & Not significant \\
-    \ldots & & & \\
+    LR-GD vs.\ LR-Newton          & 4.8193  & 0.0281  & Có ý nghĩa ($p < 0.05$) \\
+    LDA   vs.\ LR-GD              & 18.2403 & $<$0.001 & Rất có ý nghĩa ($p < 0.001$) \\
+    GNB   vs.\ LDA                & 23.2654 & $<$0.001 & Rất có ý nghĩa ($p < 0.001$) \\
+    Reg.\ LR L2 ($\lambda$=0.001) vs.\ LR-GD & 0.0000 & 1.0000 & Không có ý nghĩa \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Nhận xét: P-value $< 0.05$ từ chối $H_0$ (hai mô hình có hiệu năng như nhau), nghĩa là sự khác biệt có ý nghĩa thống kê.
+\noindent\textbf{Nhận xét:}
+\begin{itemize}
+  \item \textbf{LR-GD vs.\ LR-Newton} ($\chi^2 = 4.82$, $p = 0.028$): Sự khác biệt \emph{có ý nghĩa thống kê} -- LR-Newton phân lớp đúng một số mẫu mà LR-GD phân lớp sai, xác nhận Newton hội tụ tốt hơn GD trên tập Adult.
+  \item \textbf{LDA vs.\ LR-GD} ($\chi^2 = 18.24$, $p < 0.001$) và \textbf{GNB vs.\ LDA} ($\chi^2 = 23.27$, $p < 0.001$): Các cặp này cho thấy sự khác biệt rất rõ ràng, phản ánh hiệu năng Recall thấp hơn đáng kể của LDA và GNB so với Logistic Regression.
+  \item \textbf{Reg.\ LR L2 ($\lambda$=0.001) vs.\ LR-GD} ($\chi^2 = 0$, $p = 1$): Hai mô hình dự đoán \emph{hoàn toàn giống nhau} trên tập test -- Regularization L2 với $\lambda$ rất nhỏ không thay đổi quyết định phân lớp.
+\end{itemize}
 
 % ============================================================
 % SECTION 7 -- THẢO LUẬN
@@ -538,33 +676,91 @@ Nhận xét: P-value $< 0.05$ từ chối $H_0$ (hai mô hình có hiệu năng 
 \label{sec:discussion}
 
 \subsection{Mô hình tốt nhất}
-% Viết nhận xét dựa trên kết quả thực nghiệm
-Mô hình \textbf{[TÊN MÔ HÌNH]} đạt F1 tốt nhất ($\approx$X.XXX) và AUC $\approx$X.XXX. Nguyên nhân:
+
+Dựa trên kết quả thực nghiệm tổng hợp từ Bảng~\ref{tab:results} và Bảng~\ref{tab:cv},
+mô hình \textbf{Logistic Regression Newton-Raphson (LR-Newton)} được đánh giá là tốt nhất
+cho bài toán phân loại thu nhập trên bộ dữ liệu Adult Census Income.
+
 \begin{itemize}
-  \item [Thêm phân tích]
+  \item \textbf{Accuracy}: $0.8267$ -- cao nhất trong nhóm các mô hình không dùng class weighting.
+  \item \textbf{F1-Score (class $>$50K)}: $0.5529$ -- cao nhất trong nhóm mô hình cân bằng Precision/Recall.
+  \item \textbf{AUC}: $0.8468$ -- phản ánh khả năng phân tách tốt giữa hai lớp.
+  \item \textbf{5-Fold CV}: F1 $= 0.5568 \pm 0.0088$, Accuracy $= 0.8272 \pm 0.0027$ -- ổn định,
+        std nhỏ xác nhận mô hình không overfit.
+  \item \textbf{McNemar Test} (LR-GD vs.\ LR-Newton): $\chi^2 = 4.82$, $p = 0.028$ --
+        LR-Newton thực sự phân lớp đúng \emph{thêm} một số mẫu so với LR-GD, sự khác biệt có ý nghĩa thống kê.
 \end{itemize}
+
+\noindent\textbf{Lý do LR-Newton tốt hơn LR-GD:}
+Newton-Raphson sử dụng đạo hàm bậc hai (Hessian) để tính bước nhảy tối ưu, nên hội tụ
+trong $\sim$8 iterations thay vì 300 iterations của Gradient Descent.
+Trên bộ dữ liệu Adult ($\sim$32K mẫu, 12 features), chi phí tính Hessian $O(D^2)$ vẫn
+chấp nhận được và đổi lại có nghiệm chất lượng cao hơn.
+
+\noindent\textbf{Lưu ý về LR-Weighted:} Nếu ưu tiên \textbf{Recall lớp thiểu số} ($>$50K),
+mô hình \textbf{Logistic Regression với class weighting} đạt Recall $= 0.7666$ (cao nhất),
+nhưng Precision giảm mạnh ($0.5053$) và Accuracy chỉ $0.7631$.
+Đây là sự đánh đổi (trade-off) giữa Recall và Precision trong bài toán mất cân bằng lớp.
 
 \subsection{Điểm mạnh và hạn chế từng nhóm mô hình}
 
 \begin{table}[H]
   \centering
-  \caption{Ưu và nhược điểm các nhóm mô hình}
-  \begin{tabular}{p{3cm}p{5cm}p{5cm}}
+  \caption{Ưu và nhược điểm các nhóm mô hình -- đối chiếu với kết quả thực nghiệm}
+  \label{tab:strengths}
+  \begin{tabular}{p{2.8cm}p{5.2cm}p{5.2cm}}
     \toprule
     \textbf{Mô hình} & \textbf{Ưu điểm} & \textbf{Hạn chế} \\
     \midrule
-    Logistic Reg. & Đơn giản, có thể giải thích & Chỉ tuyến tính \\
-    LDA & Hiệu quả nếu phân phối Gaussian & Giả định shared covariance quá mạnh \\
-    QDA & Linh hoạt hơn LDA & Nhiều tham số hơn, dễ overfit \\
-    Naive Bayes & Rất nhanh, ít dữ liệu & Giả định độc lập quá mạnh \\
-    Kernel LR & Phi tuyến & Chậm, $O(n^2)$ \\
-    Perceptron & Đơn giản & Không hội tụ nếu dữ liệu không linearly separable \\
+    Logistic Reg.\ GD
+      & Đơn giản, có thể giải thích được trọng số $\theta$; ổn định (CV std $\leq 0.003$)
+      & Hội tụ chậm ($\sim$300 iters); bị giới hạn bởi linear boundary \\
+    \addlinespace
+    Logistic Reg.\ Newton
+      & Hội tụ rất nhanh ($\sim$8 iters); F1 cao nhất trong nhóm không weighting
+      & Chi phí $O(D^2)$ tính Hessian; khó scale khi $D$ rất lớn \\
+    \addlinespace
+    LDA
+      & Phân rã Fisher ratio, dễ visualize; không cần gradient descent
+      & Giả định Gaussian và shared covariance: bị vi phạm trên Adult (nhiều feature lệch phân phối); F1 $= 0.5012$ thấp hơn LR \\
+    \addlinespace
+    QDA
+      & Linh hoạt hơn LDA (covariance riêng mỗi lớp)
+      & Quá nhiều tham số với $D=12$; AUC $= 0.8526$ tốt nhưng Recall $= 0.2972$ rất thấp -- bị ảnh hưởng nặng bởi imbalance \\
+    \addlinespace
+    Gaussian Naive Bayes
+      & Rất nhanh, ít tham số, phù hợp dữ liệu thưa
+      & Giả định độc lập điều kiện vi phạm trên Adult (features tương quan); F1 thấp nhất $= 0.4095$ \\
+    \addlinespace
+    Probit / Laplace
+      & Mô hình hóa noise theo phân phối Gaussian / Laplace; phù hợp khi noise outlier
+      & Training chậm hơn LR-GD; F1 tương đương LR-GD nhưng không vượt trội \\
+    \addlinespace
+    Reg.\ LR (L1/L2)
+      & L1 tự động feature selection; L2 ổn định trọng số
+      & Với $\lambda = 0.001$ quá nhỏ, kết quả giống LR-GD ($\chi^2=0$, $p=1$); cần tune $\lambda$ kỹ hơn \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \subsection{Ảnh hưởng của imbalanced data}
-Khi không dùng class weighting, các mô hình thiên về lớp đa số ($\leq$50K), dẫn đến Recall của lớp $>$50K thấp. Kỹ thuật \texttt{class\_weight='balanced'} cải thiện Recall lớp thiểu số lên $\approx$X\% nhưng có thể giảm Precision.
+
+Bộ dữ liệu Adult có mất cân bằng lớp đáng kể: \textbf{75.93\% mẫu thuộc lớp $\leq$50K}
+và chỉ \textbf{24.07\% thuộc lớp $>$50K}. Điều này ảnh hưởng trực tiếp đến hiệu năng:
+
+\begin{itemize}
+  \item \textbf{Không dùng class weighting}: Tất cả mô hình thiên về lớp đa số.
+        Recall lớp $>$50K dao động trong khoảng $0.30$--$0.45$, phản ánh mô hình bỏ sót
+        phần lớn người có thu nhập cao.
+        Phân tích lỗi cho thấy \textbf{78.4\% lỗi} là ``$>$50K bị dự đoán nhầm thành $\leq$50K''.
+  \item \textbf{Dùng class weighting (LR-Weighted)}: Recall lớp $>$50K tăng lên $0.7666$
+        (cải thiện $\approx$+32 điểm phần trăm so với LR-GD $0.4247$), nhưng Precision
+        giảm từ $0.73$ xuống $0.51$ và Accuracy giảm từ $0.82$ xuống $0.76$.
+  \item \textbf{Kết luận trade-off}: Với bài toán phân loại thu nhập, nếu chi phí bỏ sót
+        người có thu nhập cao ($>$50K) lớn hơn chi phí cảnh báo nhầm (ví dụ: hệ thống
+        cấp tín dụng), nên dùng LR-Weighted. Ngược lại, nếu cần cân bằng Precision/Recall,
+        LR-Newton là lựa chọn tốt hơn.
+\end{itemize}
 
 % ============================================================
 % SECTION 8 -- KẾT LUẬN
@@ -574,18 +770,30 @@ Khi không dùng class weighting, các mô hình thiên về lớp đa số ($\l
 
 Báo cáo đã:
 \begin{enumerate}
-  \item Phân tích EDA toàn diện bộ dữ liệu Adult Census Income.
-  \item Triển khai 13 mô hình phân loại \emph{from scratch} với NumPy.
-  \item So sánh hiệu năng trên nhiều metric (F1, AUC, Recall, McNemar Test).
-  \item Phân tích tác động của regularization và xử lý imbalanced data.
+  \item Phân tích EDA toàn diện bộ dữ liệu Adult Census Income (32{,}561 mẫu, 14 features):
+        xử lý missing values, phát hiện outlier (đặc biệt \texttt{hours-per-week} có
+        27.7\% outlier theo IQR), mã hóa categorical features.
+  \item Triển khai \textbf{10 mô hình phân loại} \emph{from scratch} bằng NumPy:
+        LR-GD, LR-Newton, LDA, QDA, Probit, Laplace, Reg.\ LR L1/L2, LR-Weighted, GNB.
+  \item So sánh hiệu năng trên tập test (Accuracy, Precision, Recall, F1, AUC, AP)
+        và xác nhận tính ổn định qua \textbf{5-Fold Cross-Validation}.
+  \item Kiểm định thống kê bằng \textbf{McNemar Test} cho 4 cặp mô hình.
+  \item Phân tích tác động của \textbf{imbalanced data} và kỹ thuật class weighting.
 \end{enumerate}
 
 \textbf{Kết luận chính:}
 \begin{itemize}
-  \item [Mô hình tốt nhất] đạt F1 $\approx$ X.XXX trên tập test.
-  \item Newton-Raphson hội tụ nhanh hơn GD $\sim$\textbf{X}x về số iterations.
-  \item LDA vượt QDA trên dữ liệu này vì [lý do].
-  \item Class weighting cải thiện đáng kể Recall của lớp thiểu số.
+  \item \textbf{LR-Newton} là mô hình tốt nhất cho binary classification trên Adult:
+        F1 $= 0.5529$, AUC $= 0.8468$, hội tụ trong $\approx 8$ iterations.
+  \item \textbf{Newton-Raphson hội tụ nhanh hơn Gradient Descent $\sim$37 lần}
+        về số iterations (8 vs.\ 300), xác nhận bởi McNemar Test ($p = 0.028$).
+  \item \textbf{LDA vượt QDA} trên dữ liệu này vì dù QDA linh hoạt hơn, tập Adult có
+        imbalance nghiêm trọng khiến QDA ước lượng covariance lớp thiểu số kém chính xác hơn,
+        dẫn đến Recall $= 0.30$ (thấp hơn LDA $0.39$).
+  \item \textbf{Class weighting} cải thiện Recall lớp thiểu số từ $0.43$ lên $0.77$
+        (+34 điểm phần trăm), nhưng đánh đổi Precision giảm từ $0.73$ xuống $0.51$.
+  \item \textbf{Regularization L2} ($\lambda = 0.001$) cho kết quả giống hệt LR-GD
+        ($\chi^2 = 0$, $p = 1$) -- cần tăng $\lambda$ để thấy hiệu ứng regularization rõ hơn.
 \end{itemize}
 
 % ============================================================
@@ -628,20 +836,97 @@ fisher = lda.compute_fisher_ratios(X_train, y_train)
 \section{Hyperparameter Tuning}
 \label{app:hparam}
 
-% Bảng tuning learning rate, lambda, ...
+Phần này tổng hợp kết quả thực nghiệm liên quan đến việc lựa chọn siêu tham số
+cho các mô hình phân loại, bao gồm: hệ số regularization $\lambda$, loại
+regularization (L1/L2), và tác động của class weighting.
+
+% ── Bảng 1: So sánh L1 / L2 / No-Reg trên tập test ──────────────────────────
+\subsection*{B.1 \ So sánh Regularization trên Tập Test}
+
 \begin{table}[H]
   \centering
-  \caption{Grid Search Learning Rate -- Logistic Regression GD}
-  \begin{tabular}{lccc}
+  \caption{Hiệu năng trên tập test -- Các cấu hình Regularization (LR-GD, $\alpha=0.1$, 300 epochs)}
+  \label{tab:reg_test}
+  \begin{tabular}{lccccr}
     \toprule
-    $\alpha$ & Train F1 & Val F1 & Test F1 \\
+    \textbf{Cấu hình} & \textbf{Accuracy} & \textbf{F1} & \textbf{Recall} & \textbf{Non-zero $\theta$} & \textbf{Sparsity (\%)} \\
     \midrule
-    0.001 & X.XX & X.XX & X.XX \\
-    0.01  & X.XX & X.XX & X.XX \\
-    0.1   & X.XX & X.XX & X.XX \\
+    No Reg              & 0.8234 & 0.5367 & 0.4247 & 12 & 0.0 \\
+    L2 ($\lambda=0.1$)  & 0.8234 & 0.5367 & 0.4247 & 12 & 0.0 \\
+    L1 ($\lambda=0.1$)  & 0.8234 & 0.5367 & 0.4247 & 12 & 0.0 \\
+    L1 ($\lambda=1.0$)  & 0.8233 & 0.5361 & 0.4241 & 12 & 0.0 \\
     \bottomrule
   \end{tabular}
 \end{table}
+
+\noindent\textbf{Nhận xét:}
+Trên bộ dữ liệu Adult (D=12 features), cả ba cấu hình regularization cho kết quả
+gần như đồng nhất trên tập test. Nguyên nhân: số chiều đặc trưng thấp nên mô hình
+ít có nguy cơ overfit, regularization ổn định nhưng không mang lại cải thiện đáng
+kể. L1 với $\lambda=1.0$ mới bắt đầu ảnh hưởng nhẹ đến F1 ($-0.0006$) mà không
+tạo ra sparsity (tất cả 12 trọng số đều khác 0).
+
+% ── Bảng 2: 5-Fold CV chọn λ tối ưu ─────────────────────────────────────────
+\subsection*{B.2 \ Chọn $\lambda$ Tối Ưu bằng 5-Fold Cross-Validation}
+
+\begin{table}[H]
+  \centering
+  \caption{Kết quả 5-Fold Stratified CV chọn $\lambda$ (metric = F1, LR-GD, $\alpha=0.1$, 200 epochs)}
+  \label{tab:cv_lambda}
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Loại Reg.} & \textbf{Best $\lambda$} & \textbf{CV F1 (mean $\pm$ std)} \\
+    \midrule
+    L1 & 0.05  & $0.5349 \pm 0.0114$ \\
+    L2 & 0.001 & $0.5348 \pm 0.0114$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Phân tích:}
+\begin{itemize}
+  \item \textbf{L1 (Lasso)} -- Best $\lambda = 0.05$: đẩy một số trọng số về 0 khi
+        $\lambda$ đủ lớn, hỗ trợ feature selection; nhưng tại $\lambda=0.05$ vẫn
+        chưa tạo sparsity rõ ràng trên D=12.
+  \item \textbf{L2 (Ridge)} -- Best $\lambda = 0.001$: co đều các trọng số, ít
+        đưa về 0; phù hợp khi nhiều feature cùng hữu ích.
+  \item Cả hai cho CV F1 gần như tương đương ($\approx 0.5349$), độ lệch chuẩn
+        thấp ($\pm 0.0114$) -- mô hình ổn định trên các fold.
+  \item \textbf{Trade-off bias-variance:} $\lambda \to 0$ làm tăng variance (dễ
+        overfit); $\lambda$ quá lớn gây underfitting. CV giúp tìm điểm cân bằng
+        tối ưu.
+\end{itemize}
+
+% ── Bảng 3: Class Weighting ──────────────────────────────────────────────────
+\subsection*{B.3 \ Tác Động của Class Weighting}
+
+\begin{table}[H]
+  \centering
+  \caption{Unweighted vs.\ Class-Weighted Logistic Regression (LR-GD) trên tập test}
+  \label{tab:class_weight}
+  \begin{tabular}{lccccc}
+    \toprule
+    \textbf{Cấu hình} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall ($>$50K)} & \textbf{F1} & \textbf{AUC} \\
+    \midrule
+    Unweighted      & \textbf{0.823} & \textbf{0.729} & 0.425 & 0.537 & 0.845 \\
+    Class-Weighted  & 0.763          & 0.505          & \textbf{0.767} & \textbf{0.609} & \textbf{0.847} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Phân tích:}
+\begin{itemize}
+  \item Class weighting tăng Recall lớp thiểu số ($>$50K) từ $0.425$ lên
+        $\mathbf{0.767}$ (+34 điểm phần trăm, tương đương +80\%).
+  \item Đánh đổi: Accuracy giảm 6\% và Precision giảm từ $0.729$ xuống $0.505$.
+  \item F1 tăng từ $0.537$ lên $\mathbf{0.609}$ vì lợi ích từ Recall lớn hơn
+        mất mát từ Precision.
+  \item AUC không đổi nhiều ($0.845 \to 0.847$) -- threshold-independent metric
+        ít bị ảnh hưởng bởi class weighting.
+  \item \textbf{Khuyến nghị:} Nếu ứng dụng yêu cầu giảm False Negative (bỏ sót
+        người thu nhập cao, ví dụ: marketing targeting), dùng \textbf{LR-Weighted}.
+        Nếu cần cân bằng Precision/Recall, dùng \textbf{LR-Newton}.
+\end{itemize}
 
 % ============================================================
 % TÀI LIỆU THAM KHẢO

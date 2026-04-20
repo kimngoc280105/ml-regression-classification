@@ -1,0 +1,7 @@
+,Logistic (GD/Newton),Regularized Logistic (L1/L2/Weighted),LDA,QDA,GNB,Probit/Laplace
+Giả thiết phân phối,Discriminative; logit-linear decision boundary,Như Logistic + regularization / class-weight prior,Gaussian theo lớp + covariance chung,Gaussian theo lớp + covariance riêng từng lớp,Gaussian + conditional independence,Probit: latent Gaussian; Laplace: Bayesian approx quanh MAP
+Nghiệm dạng đóng,Không (GD/Newton),Không,Có (ước lượng mean/cov/prior),Có,Có,Không
+Độ phức tạp huấn luyện,"GD: O(mD) / iter, Newton: O(mD^2 + D^3) / iter",O(mD) / iter,O(mD^2 + D^3),O(mD^2 + KD^3),O(mD),O(mD) / iter + Hessian (Laplace)
+Khả năng giải thích,Cao (đọc trực tiếp hệ số theta),"Cao (L1 tạo sparsity, L2 ổn định)","Cao (Fisher direction, mean class)",Trung bình (biên phi tuyến hơn),Trung bình-cao (tham số mean/var từng lớp),"Trung bình-cao (tương tự logistic, Laplace có uncertainty)"
+Nhạy với outlier,Trung bình-cao (nhạy với điểm xa biên),Thấp hơn Logistic thường (đặc biệt L2),Cao (mean/cov rất nhạy),Cao,Trung bình (variance từng feature chịu ảnh hưởng),Trung bình
+Hiệu năng thực nghiệm,"best=LR-Newton | F1=0.5529, Acc=0.8267","best=LR-Weighted | F1=0.6091, Acc=0.7631","best=LDA | F1=0.5012, Acc=0.8151","best=QDA | F1=0.4139, Acc=0.7973","best=GNB | F1=0.4095, Acc=0.7941","best=Probit | F1=0.5331, Acc=0.8236"

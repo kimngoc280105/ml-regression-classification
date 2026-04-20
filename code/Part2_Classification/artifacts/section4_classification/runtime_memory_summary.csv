@@ -1,0 +1,15 @@
+,,train_time_s,train_time_s,train_time_s,peak_memory_mb,peak_memory_mb,peak_memory_mb
+,,mean,std,max,mean,std,max
+scenario,model,,,,,,
+feature_corruption,GNB,0.0127,0.0328,0.2212,1.3996,0.0001,1.3996
+feature_corruption,L2-LR,0.7789,0.7735,4.7043,1.6567,0.0011,1.6582
+feature_corruption,LDA,0.0147,0.0308,0.1973,1.5785,0.0002,1.5797
+feature_corruption,LR-Newton,0.0683,0.0804,0.463,3.2179,0.0008,3.2186
+noise_injection,GNB,0.006,0.0031,0.0161,1.3997,0.0003,1.4008
+noise_injection,L2-LR,0.8955,0.679,2.6832,1.6562,0.0,1.6562
+noise_injection,LDA,0.0074,0.0074,0.0329,1.5785,0.0002,1.5792
+noise_injection,LR-Newton,0.1488,0.06,0.2915,3.2242,0.0015,3.2246
+split_sensitivity,GNB,0.0229,0.0203,0.0717,1.2328,0.141,1.3996
+split_sensitivity,L2-LR,1.2582,0.6508,2.5294,1.4564,0.1696,1.6566
+split_sensitivity,LDA,0.016,0.0312,0.1275,1.3819,0.1662,1.5785
+split_sensitivity,LR-Newton,0.0889,0.0398,0.1571,2.8246,0.3329,3.2183
