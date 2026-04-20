@@ -13,7 +13,7 @@ from scipy import stats
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import StandardScaler
 
-from sklearn.linear_model import Ridge, Lasso, ElasticNet, LassoCV, lasso_path
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, LassoCV, lasso_path
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.metrics import mean_squared_error
 
@@ -1363,6 +1363,70 @@ def evaluate_with_kfold(X, y, model_class, param_dict, k=10, model_name="Model")
     print(f"{'='*85}\n")
     
     return stats_dict
+
+
+def perform_kfold_cv_comprehensive(X, y, model_configs, k=10):
+    """
+    Perform k-fold CV cho multiple models
+    
+    Parameters:
+    - X: base features (dùng để tạo fold indices)
+    - y: target
+    - model_configs: dict với format {model_name: (model_class, params, X_data_func)}
+                     X_data_func là function để lấy X phù hợp cho từng model
+    - k: số folds
+    
+    Returns: dict chứa kết quả CV cho mỗi model
+    """
+    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+    results = {}
+    
+    for model_name, (model_class, params, X_func) in model_configs.items():
+        mse_scores = []
+        rmse_scores = []
+        mae_scores = []
+        r2_scores = []
+        
+        for train_idx, val_idx in kf.split(X):
+            # Lấy X_data phù hợp cho model này
+            X_train_fold, X_val_fold = X_func(train_idx, val_idx)
+            y_train_fold = y[train_idx]
+            y_val_fold = y[val_idx]
+            
+            # Khởi tạo và huấn luyện model
+            if model_class == LinearRegression:
+                model = model_class()
+            else:
+                model = model_class(**params)
+            
+            # Xử lý WLS: tính weights từ train fold
+            if model_name == "2. WLS":
+                ols_temp = LinearRegression()
+                ols_temp.fit(X_train_fold, y_train_fold)
+                residuals_temp = y_train_fold - ols_temp.predict(X_train_fold)
+                weights = 1.0 / (np.abs(residuals_temp) + 1e-5)
+                model.fit(X_train_fold, y_train_fold, sample_weight=weights)
+            else:
+                model.fit(X_train_fold, y_train_fold)
+            
+            # Dự đoán
+            y_pred_fold = model.predict(X_val_fold)
+            
+            # Tính metrics
+            mse_scores.append(mean_squared_error(y_val_fold, y_pred_fold))
+            rmse_scores.append(np.sqrt(mean_squared_error(y_val_fold, y_pred_fold)))
+            mae_scores.append(mean_absolute_error(y_val_fold, y_pred_fold))
+            r2_scores.append(r2_score(y_val_fold, y_pred_fold))
+        
+        # Tính mean ± std
+        results[model_name] = {
+            'MSE': f"{np.mean(mse_scores):.4f}±{np.std(mse_scores):.4f}",
+            'RMSE': f"{np.mean(rmse_scores):.4f}±{np.std(rmse_scores):.4f}",
+            'MAE': f"{np.mean(mae_scores):.4f}±{np.std(mae_scores):.4f}",
+            'R²': f"{np.mean(r2_scores):.4f}±{np.std(r2_scores):.4f}"
+        }
+    
+    return results
 
 
 def statistical_test_paired(y_true, y_pred_model1, y_pred_model2, 
