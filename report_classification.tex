@@ -76,10 +76,12 @@
   \vspace{1.5cm}
 
   \begin{tabular}{ll}
-    \textbf{Nhóm:}     & Group\_01 \\[4pt]
-    \textbf{Thành viên:} & Nguyễn Văn A -- 21xxxxxx \\
-                         & Trần Thị B  -- 21xxxxxx \\
-    \textbf{Giảng viên:} & TS. Nguyễn Văn C \\[4pt]
+    \textbf{Nhóm:}     & Group\_11 \\[4pt]
+    \textbf{Thành viên:} & Nguyễn Mạnh Thắng -- 23120084\\
+                         & Trần Kim Ngọc  -- 21521062 \\
+                         & Nguyễn Thành Nguyên Anh -- 23120063 \\
+                         & Trần Đình Luân -- 23120059 \\
+                         & Nguyễn Thiện Nhân -- 23120064 \\
     \textbf{Năm học:}  & 2025 -- 2026 \\
   \end{tabular}
 
@@ -143,15 +145,16 @@ Dự án triển khai 13 mô hình phân loại:
     \toprule
     \textbf{Thuộc tính} & \textbf{Training Set} & \textbf{Test Set} & \textbf{Tổng} \\
     \midrule
-    Số mẫu         & X & X & X \\
+    Số mẫu         & 32561 & 16281 & 48842 \\
     Số đặc trưng   & 14 & 14 & 14 \\
-    Lớp $\leq$50K (\%) & X\% & X\% & X\% \\
-    Lớp $>$50K (\%) & X\% & X\% & X\% \\
-    Missing values & X & X & X \\
+    Lớp $\leq$50K (\%) & 75.9\% & 76.1\% & 76.0\% \\
+    Lớp $>$50K (\%) & 24.1\% & 23.9\% & 24.0\% \\
+    Missing values & 0 & 0 & 0 \\
     \bottomrule
   \end{tabular}
 \end{table}
-
+\label{sec:intro}
+Ở đây tỉ lệ Missing value ở cả tập test và tập training đều bằng 0 bởi vì nhóm đã xử lý Missing value ở bước tiền xử lý dữ liệu bằng cách điền vào các chỗ bị thiếu bằng mode trước khi thực hiện chia tập dữ liệu.
 \subsection{Phân phối nhãn và tính imbalanced}
 
 Bộ dữ liệu có tỷ lệ mất cân bằng lớp khoảng \textbf{3:1} (tức $\approx$75\% mẫu thuộc lớp $\leq$50K), được thể hiện ở Hình~\ref{fig:class_dist}.
@@ -321,7 +324,7 @@ với $\mathbf{R} = \text{diag}(\hat{y}^{(i)}(1-\hat{y}^{(i)}))$.
   \label{fig:gd_newton}
 \end{figure}
 
-Nhận xét: Newton-Raphson hội tụ chỉ sau $\sim$X iterations so với X iterations của GD, nhưng mỗi iteration tốn chi phí $O(nd^2)$ để tính Hessian.
+Nhận xét: Newton-Raphson hội tụ chỉ sau $\sim$8 iterations so với 300 iterations của GD, nhưng mỗi iteration tốn chi phí $O(nd^2)$ để tính Hessian.
 
 % -----------------------------------------------------------
 
@@ -558,7 +561,7 @@ Do dữ liệu \emph{imbalanced} ($\approx$3:1), phương pháp đánh giá chí
   }
 \end{table}
 
-\textit{Ghi chú:} Softmax Regression, OvR, OvO đánh giá trên tập đa lớp (xem Bảng~\ref{tab:results_multiclass}). Perceptron và Kernel LR (RBF) không được đưa vào so sánh định lượng do hạn chế hội tụ/thời gian huấn luyện.
+\textit{Ghi chú:} Perceptron và Kernel LR (RBF) không được đưa vào so sánh định lượng do hạn chế hội tụ/thời gian huấn luyện.
 
 \subsection{Kết quả 5-Fold Cross-Validation (mean\,$\pm$\,std)}
 \label{ssec:cv}
@@ -618,13 +621,6 @@ Nhận xét:
 \end{figure}
 
 \subsection{Phân tích Regularization}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.75\textwidth]{figures/regularization_comparison.png}
-  \caption{Kết quả F1-Score theo $\lambda$ với L1 và L2 Regularization.}
-  \label{fig:reg}
-\end{figure}
 
 Nhận xét:
 \begin{itemize}
