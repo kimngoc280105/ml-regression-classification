@@ -21,9 +21,9 @@
     0.2,
     0.3
   ],
-  "fast_mode": true,
+  "fast_mode": false,
   "max_samples_fast_mode": 12000,
-  "working_samples": 12000,
+  "working_samples": 32561,
   "total_samples": 32561,
   "model_factories": [
     "LR-Newton",
@@ -38,6 +38,6 @@
     "L1-LR",
     "Probit"
   ],
-  "best_l2_used": 0.001,
-  "best_l1_used": 0.05
+  "best_l2_used": 5.0,
+  "best_l1_used": 0.001
 }
