@@ -667,6 +667,10 @@ from sklearn.linear_model import ElasticNet
 from sklearn.model_selection import KFold, cross_val_score
 
 def plot_elastic_net_heatmap(X_train, y_train, alphas_en, l1_ratios, k=3):
+    """
+    Grid Search + K-Fold CV cho Elastic Net.
+    Bỏ X_val, y_val → dùng CV trên toàn X_train.
+    """
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     results_en = []
 
@@ -675,61 +679,53 @@ def plot_elastic_net_heatmap(X_train, y_train, alphas_en, l1_ratios, k=3):
             en = ElasticNet(alpha=α, l1_ratio=l1_r, max_iter=10000)
             neg_mse = cross_val_score(
                 en, X_train, y_train,
-                cv=kf, scoring='neg_mean_squared_error'
+                cv=kf,
+                scoring='neg_mean_squared_error'
             )
             mean_rmse = np.sqrt(-neg_mse).mean()
             std_rmse  = np.sqrt(-neg_mse).std()
             results_en.append((α, l1_r, mean_rmse, std_rmse))
 
-    best_en = min(results_en, key=lambda x: x[2])
+    best_en  = min(results_en, key=lambda x: x[2])
 
+    # Tạo matrix
     rmse_matrix = np.array([r[2] for r in results_en]).reshape(
         len(alphas_en), len(l1_ratios)
     )
 
+    # Vẽ heatmap
     fig, ax = plt.subplots(figsize=(10, 7))
+    im = ax.imshow(rmse_matrix, cmap='viridis', aspect='auto', origin='lower')
+    plt.colorbar(im, ax=ax, label='CV RMSE')
 
-    # ✅ Đổi sang RdYlGn_r: xanh = tốt (thấp), đỏ = xấu (cao)
-    im = ax.imshow(rmse_matrix, cmap='RdYlGn_r', aspect='auto', origin='lower')
-    cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('CV RMSE', fontsize=11)
-
+    # Label log scale cho trục Y
     ax.set_xticks(range(len(l1_ratios)))
-    ax.set_xticklabels([f'{r:.1f}' for r in l1_ratios], fontsize=11)
+    ax.set_xticklabels([f'{r:.1f}' for r in l1_ratios])
     ax.set_yticks(range(len(alphas_en)))
-    ax.set_yticklabels([f'{a:.4g}' for a in alphas_en], fontsize=11)
-    ax.set_xlabel('l1_ratio  (0=Ridge, 1=Lasso)', fontsize=12)
-    ax.set_ylabel('λ (alpha)', fontsize=12)
-    ax.set_title(f'Elastic Net Grid Search — {k}-Fold CV RMSE',
-                 fontsize=14, fontweight='bold', pad=15)
+    ax.set_yticklabels([f'{a:.4g}' for a in alphas_en])   # ← gọn hơn
+    ax.set_xlabel('l1_ratio  (0=Ridge, 1=Lasso)', fontsize=11)
+    ax.set_ylabel('λ (alpha)', fontsize=11)
+    ax.set_title(f'Elastic Net Grid Search — {k}-Fold CV RMSE', 
+                 fontsize=13, fontweight='bold')
 
-    # ✅ Text màu trắng luôn — dễ đọc trên mọi nền
-    vmin, vmax = rmse_matrix.min(), rmse_matrix.max()
+    # Annotation RMSE vào từng ô
     for i in range(len(alphas_en)):
         for j in range(len(l1_ratios)):
-            val = rmse_matrix[i, j]
-            # Chữ đen trên vùng sáng (RMSE trung bình), trắng trên vùng tối
-            norm_val = (val - vmin) / (vmax - vmin + 1e-9)
-            txt_color = 'black' if 0.35 < norm_val < 0.75 else 'white'
-            ax.text(j, i, f'{val:,.0f}',
+            ax.text(j, i, f'{rmse_matrix[i,j]:,.0f}',
                     ha='center', va='center',
-                    fontsize=9, fontweight='bold', color=txt_color)
+                    fontsize=7,
+                    color='white' if rmse_matrix[i,j] > rmse_matrix.mean() else 'black')
 
-    # ✅ Đánh dấu best bằng viền vàng nổi bật
+    # Đánh dấu best
     best_i = list(alphas_en).index(best_en[0])
     best_j = list(l1_ratios).index(best_en[1])
-    rect = plt.Rectangle(
-        (best_j - 0.48, best_i - 0.48), 0.96, 0.96,
-        linewidth=3, edgecolor='gold', facecolor='none', zorder=5
-    )
-    ax.add_patch(rect)
-    ax.plot(best_j, best_i, 'w*', markersize=18,
-            markeredgecolor='gold', markeredgewidth=1.5,
+    ax.plot(best_j, best_i, 'r*', markersize=20,
+            markeredgecolor='white', markeredgewidth=1.5,
             label=f'Best: λ={best_en[0]:.4g}, l1={best_en[1]:.1f}, RMSE={best_en[2]:,.0f}')
-    ax.legend(loc='upper right', fontsize=10,
-              framealpha=0.9, edgecolor='gray')
+    ax.legend(loc='upper right', fontsize=9)
 
     plt.tight_layout()
+    # plt.savefig(f"{PLOT_DIR}/elastic_net.png", bbox_inches="tight")
     plt.show()
 
     return rmse_matrix, best_en, results_en
