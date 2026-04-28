@@ -662,7 +662,8 @@ thay thế:
   \centering
   \caption{Các hàm cơ sở được sử dụng trong đồ án.}
   \label{tab:basis_functions}
-  \begin{tabular}{lll}
+  \small
+  \begin{tabularx}{\textwidth}{P{0.17\textwidth}P{0.43\textwidth}Y}
     \toprule
     \textbf{Loại} & \textbf{Công thức} & \textbf{Đặc điểm} \\
     \midrule
@@ -673,10 +674,13 @@ thay thế:
     Gaussian RBF  & $\phi_j(x) = \exp\!\left(-\dfrac{(x-\mu_j)^2}{2s^2}\right)$
                   & Cục bộ, trơn vô hạn \\
     Cubic Spline
-      & $\phi_j(x) = \text{SplineBasis}_j(x)$ (piecewise cubic, knot quantiles)
+      & \begin{tabular}[t]{@{}l@{}}
+          $\phi_j(x) = \text{SplineBasis}_j(x)$\\
+          (piecewise cubic, knot quantiles)
+        \end{tabular}
       & Trơn bậc 3, liên tục đạo hàm bậc 1\&2 tại knots \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \subsection{Kiểm tra giả thiết Gauss--Markov}
