@@ -1,0 +1,13 @@
+Model,Hyperparameters
+OLS,{}
+WLS,"{""sample_weight_method"": ""adaptive""}"
+Ridge,"{""alpha"": 35.564803062231285}"
+Lasso,"{""alpha"": 232.99518105153672, ""max_iter"": 10000}"
+Lasso (14 features),"{""alpha"": 232.99518105153672, ""max_iter"": 10000, ""n_features"": 14}"
+Elastic Net,"{""alpha"": 0.01778279410038923, ""l1_ratio"": 0.7, ""max_iter"": 10000}"
+Polynomial (deg=2),"{""degree"": 2, ""alpha"": 1.0}"
+Gaussian RBF,"{""kernel"": ""rbf"", ""n_centers"": 100, ""alpha"": 1.0}"
+Cubic Spline,"{""kernel"": ""spline"", ""n_knots"": 10, ""alpha"": 1.0}"
+Bayesian Ridge,{}
+KRR - RBF,"{""kernel"": ""rbf"", ""alpha"": 0.1, ""gamma"": 0.01}"
+KRR - Polynomial,"{""kernel"": ""polynomial"", ""alpha"": 10.0, ""degree"": 2}"

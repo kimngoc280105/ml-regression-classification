@@ -39,8 +39,8 @@ Nhóm: `Group_11`
 | MSSV | Họ và tên | Phần phụ trách chính |
 | --- | --- | --- |
 | 23120084 | Nguyễn Mạnh Thắng | Classification: nhóm mô hình Logistic Regression, gồm GD, Newton-Raphson/IRLS, softmax, OvR/OvO, loss curves và so sánh hội tụ. |
-| 23120063 | Nguyễn Thành Nguyên Anh | Classification: LDA/QDA, Fisher ratio, Perceptron, L1/L2, class weighting, CV, ROC/PR, calibration, McNemar, robustness, bonus models và tổng hợp báo cáo classification. |
-| 21521062 | Trần Kim Ngọc | Regression: EDA, tiền xử lý, phần nâng cao gồm GPR, Robust Regression, phân tích Bias-Variance thực nghiệm và tổng hợp báo cáo. |
+| 23120063 | Nguyễn Thành Nguyên | Classification: LDA/QDA, Fisher ratio, Perceptron, L1/L2, class weighting, CV, ROC/PR, calibration, McNemar, robustness, bonus models và tổng hợp báo cáo classification. |
+| 23120062 | Trần Kim Ngọc | Regression: EDA, tiền xử lý, phần nâng cao gồm GPR, Robust Regression, phân tích Bias-Variance thực nghiệm và tổng hợp báo cáo. |
 | 23120059 | Trần Đình Luân | Regression: regularization, feature selection, mô hình với hàm cơ sở phi tuyến, sensitivity và robustness. |
 | 23120064 | Nguyễn Thiện Nhân | Regression: hồi quy tuyến tính, ablation study, Bayesian regression, Evidence Maximization và Kernel Ridge Regression. |
 

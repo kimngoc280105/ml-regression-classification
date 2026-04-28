@@ -45,8 +45,6 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textcolor{HCMUSGray}{CSC14005 -- Classification}}
-\fancyhead[R]{\small\textcolor{HCMUSGray}{HCMUS}}
 \fancyfoot[C]{\small\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\headrule}{\hbox to\headwidth{\color{HCMUSGray}\leaders\hrule height \headrulewidth\hfill}}
@@ -109,15 +107,14 @@
 \begin{tabular}{rl}
 \textbf{Nhóm:} & Group\_11 \\[4pt]
 \textbf{Thành viên:} & Nguyễn Mạnh Thắng -- 23120084 \\
-& Trần Kim Ngọc -- 21521062 \\
-& Nguyễn Thành Nguyên Anh -- 23120063 \\
+& Trần Kim Ngọc -- 23120062 \\
+& Nguyễn Thành Nguyên -- 23120063 \\
 & Trần Đình Luân -- 23120059 \\
 & Nguyễn Thiện Nhân -- 23120064 \\[4pt]
 \textbf{Năm học:} & 2025--2026
 \end{tabular}
 
 \vfill
-{\large TP. Hồ Chí Minh, \today}
 \end{titlepage}
 
 \tableofcontents
@@ -136,7 +133,7 @@
 \midrule
 2 & 23120063 & Nguyễn Thành Nguyên & Phụ trách Classification: nhóm mô hình còn lại và đánh giá (LDA/QDA, Fisher ratio, Perceptron, L1/L2, class-weighted loss, CV, ROC/PR, calibration, McNemar, robustness), bonus và tổng hợp report classification. & 100\% \\
 \midrule
-3 & 21521062 & Trần Kim Ngọc & Phụ trách Regression: EDA, tiền xử lý, phần nâng cao (bao gồm GPR, Robust Reg., phân tích Bias-Variance thực nghiệm) và tổng hợp báo cáo. & 100\% \\
+3 & 23120062 & Trần Kim Ngọc & Phụ trách Regression: EDA, tiền xử lý, phần nâng cao (bao gồm GPR, Robust Reg., phân tích Bias-Variance thực nghiệm) và tổng hợp báo cáo. & 100\% \\
 \midrule
 4 & 23120059 & Trần Đình Luân & Phụ trách Regression: hồi quy có regularization và feature selection, mô hình với hàm cơ sở phi tuyến và đánh giá sensitivity + robustness. & 100\% \\
 \midrule
@@ -151,7 +148,8 @@
 % PART 2 -- REGRESSION
 % ============================================================
 \part{Bài toán Hồi quy (Regression)}
-
+\fancyhead[L]{\small\textcolor{HCMUSGray}{CSC14005 -- Đồ Án 1}}
+\fancyhead[R]{\small\textcolor{HCMUSGray}{Part 1: Regression}}
 
 % ============================================================
 % SECTION 1 -- GIỚI THIỆU
@@ -2692,50 +2690,14 @@ bao gồm:
         Boosting có thể đạt $R^2 > 0.85$ trên California Housing.
 \end{itemize}
 
-% ============================================================
-% TÀI LIỆU THAM KHẢO
-% ============================================================
-\bibliographystyle{unsrt}
-\begin{thebibliography}{9}
-
-\bibitem{bishop2006}
-  Christopher M. Bishop,
-  \textit{Pattern Recognition and Machine Learning}.
-  Springer, 2006.
-
-\bibitem{hastie2009}
-  Trevor Hastie, Robert Tibshirani, Jerome Friedman,
-  \textit{The Elements of Statistical Learning}, 2nd ed.
-  Springer, 2009.
-
-\bibitem{murphy2012}
-  Kevin P. Murphy,
-  \textit{Machine Learning: A Probabilistic Perspective}.
-  MIT Press, 2012.
-
-\bibitem{scikit-learn}
-  Fabian Pedregosa et al.,
-  ``Scikit-learn: Machine Learning in Python,''
-  \textit{Journal of Machine Learning Research}, vol.~12, pp.~2825--2830, 2011.
-
-\bibitem{uci}
-  Dua, D. and Graff, C.,
-  ``UCI Machine Learning Repository,'' 2019.
-  [Online]. Available: \url{https://archive.ics.uci.edu}
-
-\bibitem{geron2019}
-  Aurélien Géron,
-  \textit{Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow},
-  2nd ed. O'Reilly Media, 2019.
-  
-\end{thebibliography}
-
 
 % ============================================================
 % PART 3 -- CLASSIFICATION
 % ============================================================
 \newpage
 \part{Bài toán Phân lớp (Classification)}
+\fancyhead[L]{\small\textcolor{HCMUSGray}{CSC14005 -- Đồ Án 1}}
+\fancyhead[R]{\small\textcolor{HCMUSGray}{Part 2: Classification}}
 
 \section{Tổng quan classification}
 
@@ -3398,6 +3360,9 @@ Nếu phải chọn mô hình để báo cáo như baseline chính, nhóm chọn
 \section*{Tài liệu tham khảo}
 \addcontentsline{toc}{section}{Tài liệu tham khảo}
 
+% ============================================================
+% TÀI LIỆU THAM KHẢO
+% ============================================================
 \begin{thebibliography}{9}
 \bibitem{bishop2006}
 C. M. Bishop, \textit{Pattern Recognition and Machine Learning}. Springer, 2006.
